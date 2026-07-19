@@ -1,0 +1,243 @@
+---
+title: "Error Handling Best Practices in Express"
+description: "Best practices for handling errors in Express applications, covering centralized error middleware, custom error classes, async error handling, and consistent..."
+category: expressjs
+tags: ["expressjs", "error-handling", "nodejs", "backend"]
+author: arjun-mehta
+publishedAt: "2024-11-11"
+updatedAt: "2025-01-29"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Where should error handling logic live in an Express app?"
+    answer: "Centralize it in a single error-handling middleware placed after all routes, rather than duplicating try/catch response formatting logic inside every route handler."
+  - question: "Should I expose the full error stack trace to API clients?"
+    answer: "No, not in production. Stack traces can reveal internal implementation details and file paths. Log the full error server-side, but return a generic, safe message and status code to the client."
+  - question: "What is a good pattern for distinguishing operational errors from programmer errors?"
+    answer: "Create a custom error class (like AppError) for expected, operational failures such as validation or not-found errors, and treat any error that is not an instance of that class as an unexpected bug requiring closer investigation."
+  - question: "How do I handle errors in Express 5 async route handlers?"
+    answer: "Express 5 automatically forwards rejected promises from async route handlers to the error-handling middleware, removing the need for manual try/catch or wrapper functions that were required in Express 4."
+references:
+  - title: "Express Docs — Error handling"
+    url: "https://expressjs.com/en/guide/error-handling.html"
+  - title: "Node.js Docs — Error handling"
+    url: "https://nodejs.org/en/learn/asynchronous-work/error-handling-in-nodejs"
+  - title: "MDN — HTTP response status codes"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
+---
+
+## Introduction
+
+It is easy to get an Express app working when everything goes right. The real test of a backend's quality is what happens when something goes wrong — a database timeout, a malformed request, a third-party API failure. Consistent, centralized error handling turns those situations from confusing 500 pages into predictable, informative responses, both for your users and for whoever is debugging the logs at 2 a.m.
+
+## The Problem with Scattered try/catch Blocks
+
+A natural first instinct is to wrap every route handler in its own try/catch and format the error response right there:
+
+```javascript
+app.get("/users/:id", async (req, res) => {
+  try {
+    const user = await findUser(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+```
+
+This works, but duplicating that catch block across dozens of routes means the error response *format* is now scattered across the entire codebase. Changing it later — adding an error code, a request ID, a different structure — means touching every route.
+
+## Centralizing Errors with Middleware
+
+Express supports a special kind of middleware, defined with four parameters, dedicated entirely to handling errors:
+
+```javascript
+function errorHandler(err, req, res, next) {
+  const status = err.statusCode || 500;
+  const message = status === 500 ? "Internal server error" : err.message;
+
+  console.error(err);
+
+  res.status(status).json({
+    error: {
+      message,
+      code: err.code || "INTERNAL_ERROR",
+    },
+  });
+}
+
+app.use(errorHandler); // registered last, after all routes
+```
+
+Now every route only needs to call `next(err)` instead of formatting a response directly:
+
+```javascript
+app.get("/users/:id", async (req, res, next) => {
+  try {
+    const user = await findUser(req.params.id);
+    if (!user) {
+      const err = new Error("User not found");
+      err.statusCode = 404;
+      err.code = "USER_NOT_FOUND";
+      return next(err);
+    }
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+```
+
+## Custom Error Classes
+
+Manually attaching `statusCode` and `code` to plain `Error` objects works, but a dedicated error class makes intent explicit and reduces repetition:
+
+```javascript
+class AppError extends Error {
+  constructor(message, statusCode, code) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+    this.isOperational = true; // expected, "safe to show" error
+  }
+}
+
+class NotFoundError extends AppError {
+  constructor(resource) {
+    super(`${resource} not found`, 404, "NOT_FOUND");
+  }
+}
+```
+
+```javascript
+app.get("/users/:id", async (req, res, next) => {
+  const user = await findUser(req.params.id);
+  if (!user) return next(new NotFoundError("User"));
+  res.json(user);
+});
+```
+
+## Distinguishing Operational Errors from Programmer Errors
+
+Not every error should be treated the same way. An `isOperational` flag lets your central handler decide how much detail is safe to expose:
+
+```javascript
+function errorHandler(err, req, res, next) {
+  console.error(err);
+
+  if (err.isOperational) {
+    return res.status(err.statusCode).json({
+      error: { message: err.message, code: err.code },
+    });
+  }
+
+  // Unexpected bug — do not leak internals to the client
+  res.status(500).json({
+    error: { message: "Something went wrong", code: "INTERNAL_ERROR" },
+  });
+}
+```
+
+This distinction matters: a missing user (operational, expected) is safe to describe precisely, while a null-pointer bug deep in your code (a programmer error) should never leak its message or stack trace to an API consumer.
+
+## Handling Async Errors Automatically
+
+In Express 4, unhandled rejections inside async handlers never reach the error middleware unless you catch them manually. A small wrapper avoids repeating try/catch everywhere:
+
+```javascript
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
+app.get("/users/:id", asyncHandler(async (req, res) => {
+  const user = await findUser(req.params.id);
+  if (!user) throw new NotFoundError("User");
+  res.json(user);
+}));
+```
+
+Express 5 forwards rejected Promises from async handlers to the error middleware automatically, which removes the need for this wrapper in newer versions — but understanding why it was needed helps when working with existing Express 4 codebases.
+
+## Handling 404s for Unmatched Routes
+
+A catch-all route placed after all real routes, but before the error handler, gives a consistent response for unmatched URLs:
+
+```javascript
+app.use((req, res, next) => {
+  next(new AppError(`Route ${req.originalUrl} not found`, 404, "ROUTE_NOT_FOUND"));
+});
+
+app.use(errorHandler);
+```
+
+## Best Practices
+
+- Centralize error formatting in one error-handling middleware, registered after every route and other middleware.
+- Use custom error classes to attach status codes and error codes consistently, instead of setting ad hoc properties on plain errors.
+- Log full error details server-side, but only return safe, minimal information to API clients.
+- Flag expected, operational errors distinctly from unexpected programmer errors so your handler can respond appropriately to each.
+- Add a catch-all 404 handler before your error middleware so unmatched routes produce a proper JSON error instead of Express's default HTML page.
+
+## Common Mistakes to Avoid
+
+- Duplicating error response formatting inside every route handler instead of forwarding errors to a shared handler.
+- Returning raw stack traces or internal error messages to API consumers in production.
+- Forgetting to catch rejected Promises in async route handlers on Express 4, silently losing errors.
+- Treating every error the same way, regardless of whether it was an expected condition (like invalid input) or a genuine bug.
+
+## Logging Errors with Useful Context
+
+A bare `console.error(err)` inside your error-handling middleware technically works, but it makes debugging production issues far harder than it needs to be. Attaching request context to every logged error turns a vague stack trace into something you can actually act on:
+
+```javascript
+function errorHandler(err, req, res, next) {
+  const logContext = {
+    message: err.message,
+    stack: err.stack,
+    method: req.method,
+    path: req.originalUrl,
+    statusCode: err.statusCode || 500,
+    userId: req.user?.id, // if authentication middleware attached a user
+    requestId: req.id,     // if you generate a unique ID per request
+  };
+
+  console.error(JSON.stringify(logContext));
+
+  res.status(err.statusCode || 500).json({
+    error: { message: err.isOperational ? err.message : "Internal server error" },
+  });
+}
+```
+
+In production, this structured log line can be shipped to a log aggregation service and searched by `requestId`, `userId`, or `path`, letting you quickly correlate a specific error with the exact request that triggered it — especially valuable when a bug report from a user needs to be tracked down among thousands of other log lines. Adding a unique request ID early in the middleware chain (often via a small middleware that sets `req.id` before anything else runs) is a small investment that pays off enormously the first time you need to trace one specific failing request through a busy production log.
+
+## Catching Errors from Async Route Handlers
+
+A subtle trap in older versions of Express is that errors thrown inside an `async` route handler are not automatically caught and forwarded to the error-handling middleware the way synchronous throws are — an unhandled rejected Promise inside a route handler can leave a request hanging or crash the process, depending on your Node version:
+
+```javascript
+// Dangerous: a rejected Promise here is NOT automatically passed to next()
+app.get("/users/:id", async (req, res) => {
+  const user = await User.findById(req.params.id); // throws if the DB call rejects
+  res.json(user);
+});
+
+// Safe: wrap the handler so rejections are forwarded to next()
+function asyncHandler(fn) {
+  return (req, res, next) => fn(req, res, next).catch(next);
+}
+
+app.get("/users/:id", asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  res.json(user);
+}));
+```
+
+The `asyncHandler` wrapper is a small, commonly-used pattern that catches any rejected Promise from the wrapped function and passes it to `next()`, which routes it into your centralized error-handling middleware just like a synchronous throw would. Express 5 fixes this at the framework level by automatically forwarding rejected Promises from async handlers, but a huge number of production applications still run on Express 4, where this wrapper (or an equivalent from a library) remains an easy and important habit for every async route.
+
+## Conclusion
+
+Good error handling is invisible when things go right and invaluable when they do not. By centralizing error formatting, distinguishing operational from unexpected errors, and being deliberate about what you expose to clients, your Express app will fail predictably and safely — which is really the best you can ask of any error-handling strategy.

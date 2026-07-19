@@ -1,0 +1,225 @@
+---
+title: "MongoDB CRUD Operations Guide"
+description: "A hands-on guide to MongoDB CRUD operations, covering insertOne, find with query operators, updateOne/updateMany, and deleteOne/deleteMany with practical exa..."
+category: mongodb
+tags: ["mongodb", "crud", "database", "nosql"]
+author: arjun-mehta
+publishedAt: "2024-11-28"
+updatedAt: "2024-12-24"
+featured: true
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What does CRUD stand for?"
+    answer: "CRUD stands for Create, Read, Update, and Delete — the four basic operations every database needs to support, and MongoDB exposes a dedicated method or set of methods for each."
+  - question: "What is the difference between updateOne and updateMany?"
+    answer: "updateOne modifies only the first document that matches the filter, while updateMany applies the same update to every document that matches, which is useful for bulk changes across a collection."
+  - question: "How does MongoDB generate the _id field?"
+    answer: "If you do not supply an _id when inserting a document, MongoDB automatically generates a unique ObjectId, a 12-byte value that encodes a timestamp and other components, and uses it as the document's primary key."
+  - question: "Why does my update seem to do nothing?"
+    answer: "The most common cause is forgetting to wrap the changes in an update operator like $set. Passing a plain object without $set replaces the entire document instead of merging in the specified fields."
+references:
+  - title: "MongoDB Docs — CRUD Operations"
+    url: "https://www.mongodb.com/docs/manual/crud/"
+  - title: "MongoDB Docs — Query and Update Operators"
+    url: "https://www.mongodb.com/docs/manual/reference/operator/"
+  - title: "MongoDB Docs — insertOne()"
+    url: "https://www.mongodb.com/docs/manual/reference/method/db.collection.insertOne/"
+---
+
+## Introduction
+
+MongoDB stores data as flexible, JSON-like documents rather than rows in fixed tables, which changes how you think about basic data operations compared to a relational database. This guide walks through the four fundamental CRUD operations — creating, reading, updating, and deleting documents — using the MongoDB Node.js driver and mongo shell syntax, with practical examples you will use in nearly every project.
+
+## Creating Documents
+
+Inserting one document uses `insertOne`; inserting several at once uses `insertMany`:
+
+```javascript
+db.users.insertOne({
+  name: "Ada Lovelace",
+  email: "ada@example.com",
+  age: 28,
+  tags: ["engineer", "writer"],
+});
+
+db.users.insertMany([
+  { name: "Alan Turing", email: "alan@example.com", age: 34 },
+  { name: "Grace Hopper", email: "grace@example.com", age: 45 },
+]);
+```
+
+Every document automatically receives a unique `_id` field (an `ObjectId`) if you do not supply one yourself. This field acts as the document's primary key and is indexed by default.
+
+## Reading Documents with find()
+
+```javascript
+// Find all documents
+db.users.find({});
+
+// Find documents matching a filter
+db.users.find({ age: { $gte: 30 } });
+
+// Find one document
+db.users.findOne({ email: "ada@example.com" });
+
+// Projections: return only specific fields
+db.users.find({ age: { $gte: 30 } }, { name: 1, email: 1, _id: 0 });
+```
+
+## Query Operators
+
+MongoDB provides a rich set of operators for building precise filters:
+
+```javascript
+db.users.find({ age: { $gt: 25, $lt: 40 } });         // range
+db.users.find({ tags: { $in: ["engineer", "artist"] } }); // matches any
+db.users.find({ email: { $exists: true } });          // field presence
+db.users.find({ name: { $regex: /^A/, $options: "i" } }); // pattern match
+db.users.find({ $or: [{ age: { $lt: 20 } }, { age: { $gt: 60 } }] }); // logical OR
+```
+
+## Updating Documents
+
+Updates require an update operator such as `$set` to specify which fields to change — passing a plain object without an operator replaces the entire document instead of merging fields:
+
+```javascript
+// Update one matching document
+db.users.updateOne(
+  { email: "ada@example.com" },
+  { $set: { age: 29 } }
+);
+
+// Update every matching document
+db.users.updateMany(
+  { age: { $lt: 18 } },
+  { $set: { status: "minor" } }
+);
+
+// Increment a numeric field atomically
+db.users.updateOne({ email: "ada@example.com" }, { $inc: { loginCount: 1 } });
+
+// Add a value to an array field, avoiding duplicates
+db.users.updateOne({ email: "ada@example.com" }, { $addToSet: { tags: "mentor" } });
+```
+
+The `upsert` option inserts a new document if no match is found, which is convenient for "create or update" logic in a single call:
+
+```javascript
+db.users.updateOne(
+  { email: "new@example.com" },
+  { $set: { name: "New User" } },
+  { upsert: true }
+);
+```
+
+## Deleting Documents
+
+```javascript
+db.users.deleteOne({ email: "ada@example.com" });
+db.users.deleteMany({ status: "inactive" });
+```
+
+Both methods return an object describing how many documents were deleted, which is useful for confirming the operation had the intended effect.
+
+## CRUD from Node.js with the Official Driver
+
+```javascript
+import { MongoClient } from "mongodb";
+
+const client = new MongoClient(process.env.MONGODB_URI);
+await client.connect();
+
+const db = client.db("shop");
+const users = db.collection("users");
+
+// Create
+await users.insertOne({ name: "Ada", email: "ada@example.com" });
+
+// Read
+const activeUsers = await users.find({ status: "active" }).toArray();
+
+// Update
+await users.updateOne({ email: "ada@example.com" }, { $set: { status: "active" } });
+
+// Delete
+await users.deleteOne({ email: "ada@example.com" });
+```
+
+## Working with Nested Documents and Arrays
+
+One of MongoDB's strengths is storing related data directly inside a document instead of a separate table:
+
+```javascript
+db.orders.insertOne({
+  customer: { name: "Ada", email: "ada@example.com" },
+  items: [
+    { product: "Book", price: 12, qty: 2 },
+    { product: "Pen", price: 2, qty: 5 },
+  ],
+  status: "pending",
+});
+
+// Query on a nested field
+db.orders.find({ "customer.email": "ada@example.com" });
+
+// Query on array element properties
+db.orders.find({ items: { $elemMatch: { product: "Book", qty: { $gte: 1 } } } });
+```
+
+## Best Practices
+
+- Always filter updates and deletes precisely; an overly broad filter on `updateMany`/`deleteMany` can affect far more documents than intended.
+- Use projections in `find` to return only the fields you actually need, reducing network payload for large documents.
+- Index fields you filter or sort on frequently, since `find` without an index performs a full collection scan.
+- Prefer atomic operators like `$inc` and `$addToSet` over reading a value, modifying it in application code, and writing it back, which can race with concurrent updates.
+- Use `upsert` for "create if missing, otherwise update" logic instead of a separate find-then-insert-or-update round trip.
+
+## Common Mistakes to Avoid
+
+- Forgetting the `$set` operator in an update, which silently replaces the entire document instead of merging the new fields.
+- Running `updateMany`/`deleteMany` with `{}` as the filter by accident, affecting the entire collection.
+- Assuming query results are returned in insertion order without an explicit `.sort()`.
+- Not accounting for the fact that `find()` returns a cursor, not an array — you need `.toArray()` or iteration to materialize the results in the Node.js driver.
+
+## Bulk Writes for Efficiency
+
+Inserting, updating, or deleting many documents one at a time means one network round trip per operation, which adds up quickly. `bulkWrite` batches many operations into a single request:
+
+```javascript
+await db.collection("inventory").bulkWrite([
+  { insertOne: { document: { sku: "A100", stock: 50 } } },
+  { updateOne: { filter: { sku: "B200" }, update: { $set: { stock: 30 } } } },
+  { deleteOne: { filter: { sku: "C300" } } },
+]);
+```
+
+MongoDB processes the entire batch as a single network operation, which is significantly faster than issuing dozens or hundreds of individual `insertOne`/`updateOne` calls in a loop, especially when importing data or applying many small corrections at once. By default, operations run in the order provided and stop at the first error; passing `{ ordered: false }` lets independent operations continue even if one fails, which is useful when you want a best-effort batch rather than an all-or-nothing one:
+
+```javascript
+await db.collection("inventory").bulkWrite(operations, { ordered: false });
+```
+
+For very large datasets, batching writes in chunks of a few hundred to a few thousand operations per `bulkWrite` call (rather than one enormous array) usually strikes the best balance between reducing round trips and keeping each individual request a manageable size for the server to process.
+
+## Bulk Writes for Efficiency
+
+Calling `insertOne` or `updateOne` in a loop works but sends one round trip to the database per document, which becomes slow once you are processing hundreds or thousands of records. `bulkWrite` batches many operations — inserts, updates, and deletes together — into a single request:
+
+```javascript
+await db.collection("products").bulkWrite([
+  { insertOne: { document: { name: "Widget", price: 9.99 } } },
+  { updateOne: {
+      filter: { name: "Gadget" },
+      update: { $set: { price: 14.99 } },
+    } },
+  { deleteOne: { filter: { name: "Discontinued Item" } } },
+]);
+```
+
+MongoDB executes all of these operations in one network round trip instead of three, which matters enormously when the batch size grows into the hundreds or thousands — the difference between a bulk import that takes seconds and one that takes minutes is often exactly this: batching writes instead of looping over individual calls. By default, `bulkWrite` executes operations in the order given and stops on the first error; passing `{ ordered: false }` lets MongoDB continue processing the remaining operations even if some fail, which is preferable when you are inserting a large batch of independent records and want a partial success rather than an all-or-nothing outcome.
+
+## Conclusion
+
+MongoDB's CRUD API mirrors the mental model of working with JSON documents directly: insert them, query them with flexible operators, update specific fields with dedicated operators, and remove them when no longer needed. Once these four operations feel natural, the rest of MongoDB — indexing, aggregation, schema design — builds directly on top of this same foundation.

@@ -1,0 +1,260 @@
+---
+title: "Next.js App Router: A Beginner's Guide"
+description: "A beginner's guide to the Next.js App Router covering file-based routing, layouts, loading and error states, and how it differs from the older Pages Router."
+category: nextjs
+tags: ["nextjs", "app-router", "react", "routing"]
+author: priya-sharma
+publishedAt: "2024-07-10"
+updatedAt: "2024-08-09"
+featured: true
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the difference between the App Router and the Pages Router?"
+    answer: "The App Router, based in the app directory, supports React Server Components, nested layouts, and colocated loading/error states out of the box, while the older Pages Router in the pages directory renders everything as client-oriented pages by default."
+  - question: "Do I have to rewrite my whole app to use the App Router?"
+    answer: "No. Next.js allows the app and pages directories to coexist in the same project, so teams can migrate route by route instead of all at once."
+  - question: "How does routing work without a routes configuration file?"
+    answer: "The App Router uses the folder structure itself as the route map: a folder named about containing a page.js file becomes the /about route, and nested folders become nested routes automatically."
+  - question: "What is a layout.js file for?"
+    answer: "A layout wraps every page within its folder (and nested folders) with shared UI, like a navigation bar or sidebar, and it persists across navigations instead of re-rendering from scratch on every page change."
+references:
+  - title: "Next.js Docs — App Router"
+    url: "https://nextjs.org/docs/app"
+  - title: "Next.js Docs — Defining Routes"
+    url: "https://nextjs.org/docs/app/building-your-application/routing/defining-routes"
+  - title: "Next.js Docs — Layouts and Templates"
+    url: "https://nextjs.org/docs/app/building-your-application/routing/layouts-and-templates"
+---
+
+## Introduction
+
+The App Router is the modern way to build Next.js applications, built around the `app` directory and React Server Components. If you are coming from the older Pages Router, or from plain React with React Router, the biggest mental shift is that routing, layouts, and data fetching are now organized entirely around folders and special file names inside `app`. This guide walks through the essentials you need to build your first App Router project.
+
+## File-Based Routing
+
+Every folder inside `app` can become a route segment, and a `page.js` (or `page.tsx`) file inside that folder makes the segment publicly accessible:
+
+```text
+app/
+  page.js          -> /
+  about/
+    page.js        -> /about
+  blog/
+    page.js        -> /blog
+    [slug]/
+      page.js      -> /blog/:slug (dynamic route)
+```
+
+```javascript
+// app/blog/[slug]/page.js
+export default function BlogPost({ params }) {
+  return <h1>Post: {params.slug}</h1>;
+}
+```
+
+Folders that do not contain a `page.js` are not routable on their own — they can still be used purely for organizing components, or for nested layouts.
+
+## Layouts
+
+A `layout.js` file wraps the page (and any nested layouts) with shared UI. Layouts persist across navigations within the same segment, so they do not re-render or lose state when you move between pages that share them:
+
+```javascript
+// app/layout.js (root layout, required)
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <header>My Site</header>
+        {children}
+        <footer>&copy; 2026</footer>
+      </body>
+    </html>
+  );
+}
+```
+
+```javascript
+// app/blog/layout.js
+export default function BlogLayout({ children }) {
+  return (
+    <div className="blog-layout">
+      <nav>Blog Categories</nav>
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+Every route under `app/blog` is now automatically wrapped by `BlogLayout`, which itself is nested inside the root layout.
+
+## Server Components by Default
+
+Every component inside `app` is a Server Component unless you explicitly opt out. Server Components render on the server and send only HTML (plus minimal hydration data) to the browser, which keeps client bundles smaller:
+
+```javascript
+// app/products/page.js — runs on the server, can query data directly
+async function getProducts() {
+  const res = await fetch("https://api.example.com/products", { cache: "no-store" });
+  return res.json();
+}
+
+export default async function ProductsPage() {
+  const products = await getProducts();
+  return (
+    <ul>
+      {products.map((p) => <li key={p.id}>{p.name}</li>)}
+    </ul>
+  );
+}
+```
+
+Add `"use client"` at the top of a file when you need interactivity — state, effects, or browser-only APIs:
+
+```javascript
+"use client";
+import { useState } from "react";
+
+export default function LikeButton() {
+  const [liked, setLiked] = useState(false);
+  return (
+    <button onClick={() => setLiked(!liked)}>
+      {liked ? "Liked" : "Like"}
+    </button>
+  );
+}
+```
+
+## Loading and Error States
+
+Two special files handle loading and error UI automatically, without any manual conditional rendering:
+
+```javascript
+// app/blog/loading.js — shown instantly while the page segment loads
+export default function Loading() {
+  return <p>Loading posts...</p>;
+}
+```
+
+```javascript
+// app/blog/error.js — catches errors thrown while rendering this segment
+"use client";
+export default function Error({ error, reset }) {
+  return (
+    <div>
+      <p>Something went wrong: {error.message}</p>
+      <button onClick={() => reset()}>Try again</button>
+    </div>
+  );
+}
+```
+
+Next.js automatically wraps each segment in a `Suspense` boundary (for `loading.js`) and an error boundary (for `error.js`), so you get sensible loading and error UI without wiring it up by hand.
+
+## Route Groups and Dynamic Segments
+
+Parentheses around a folder name create a "route group" that organizes files without affecting the URL:
+
+```text
+app/
+  (marketing)/
+    about/page.js     -> /about
+    pricing/page.js    -> /pricing
+  (app)/
+    dashboard/page.js  -> /dashboard
+```
+
+This is useful for applying different root layouts to marketing pages versus authenticated app pages, without those group names appearing in the URL.
+
+## Navigating Between Pages
+
+The `Link` component enables client-side navigation with prefetching:
+
+```javascript
+import Link from "next/link";
+
+export default function Nav() {
+  return (
+    <nav>
+      <Link href="/">Home</Link>
+      <Link href="/blog">Blog</Link>
+    </nav>
+  );
+}
+```
+
+## Best Practices
+
+- Keep components as Server Components by default; add `"use client"` only where interactivity or browser APIs are required.
+- Use nested layouts to share UI across route segments instead of duplicating headers or navigation in every page.
+- Colocate `loading.js` and `error.js` with the segments they apply to, rather than building manual loading state everywhere.
+- Use route groups to organize large apps by section without polluting the URL structure.
+- Fetch data directly inside Server Components rather than introducing a client-side effect just to load initial data.
+
+## Common Mistakes to Avoid
+
+- Adding `"use client"` to nearly every component "to be safe," which defeats much of the benefit of Server Components.
+- Forgetting that a folder without a `page.js` is not a route, which can cause confusion when a URL returns a 404.
+- Duplicating layout UI on every page instead of using `layout.js` to share it automatically.
+- Mixing client-only browser APIs (like `window` or `localStorage`) into Server Components, which will throw at build or render time.
+
+## Metadata and SEO in the App Router
+
+Alongside routing and layouts, the App Router provides a dedicated way to manage `<head>` content — titles, descriptions, Open Graph tags — directly from the same file structure, instead of a separate `<Head>` component:
+
+```javascript
+// app/blog/[slug]/page.js
+export async function generateMetadata({ params }) {
+  const post = await getPost(params.slug);
+  return {
+    title: post.title,
+    description: post.excerpt,
+    openGraph: {
+      title: post.title,
+      images: [post.coverImage],
+    },
+  };
+}
+
+export default async function BlogPost({ params }) {
+  const post = await getPost(params.slug);
+  return <article>{post.content}</article>;
+}
+```
+
+`generateMetadata` runs on the server, can be `async` just like the page component itself, and Next.js automatically merges metadata from nested layouts and pages, with more specific segments overriding broader ones. For metadata that never changes per-route, a simple static object export works just as well:
+
+```javascript
+// app/layout.js
+export const metadata = {
+  title: {
+    default: "My Blog",
+    template: "%s | My Blog",
+  },
+  description: "Articles about web development and software engineering.",
+};
+```
+
+The `template` field automatically wraps any child page's title (like a specific post's title) with the site name, so you get consistent, structured page titles across the entire site without repeating the suffix in every single page.
+
+## Route Groups and Parallel Routes
+
+As an application grows, two App Router features help organize routes without affecting the actual URL structure. Route groups — a folder name wrapped in parentheses, like `(marketing)` — let you organize files and apply a shared layout to a set of routes without adding a segment to the URL:
+
+```bash
+app/
+  (marketing)/
+    layout.tsx      # applies only to routes inside (marketing)
+    page.tsx        # renders at "/"
+    about/page.tsx  # renders at "/about", not "/marketing/about"
+  (app)/
+    layout.tsx      # a different layout for authenticated app routes
+    dashboard/page.tsx
+```
+
+This is useful when your marketing pages and your authenticated dashboard need entirely different layouts (different headers, different navigation) but should otherwise live under the same domain. Parallel routes, denoted with an `@folder` prefix, go a step further and let you render multiple independent pages into named "slots" of the same layout simultaneously — commonly used for things like a dashboard that shows a main feed alongside an independently-loading notifications panel, each with its own loading and error states. Both features solve organizational and UX problems that become noticeable once an application has more than a handful of routes, and both are purely additive — you can adopt them incrementally as the need actually arises, rather than needing to plan for them from the very first route.
+
+## Conclusion
+
+The App Router organizes an entire application around the filesystem: folders become routes, special files become layouts, loading states, and error boundaries, and Server Components become the default rendering strategy. Once this mapping feels natural, building new routes becomes mostly a matter of creating the right files in the right folders.

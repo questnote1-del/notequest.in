@@ -1,0 +1,159 @@
+---
+title: "Git Branching Strategies Explained"
+description: "Compare popular Git branching strategies including Git Flow, GitHub Flow, and trunk-based development, with guidance on choosing the right one for your team."
+category: git
+tags: ["git", "branching", "version-control", "workflow"]
+author: notequest-team
+publishedAt: "2025-05-25"
+updatedAt: "2025-06-30"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the simplest Git branching strategy for a small team?"
+    answer: "GitHub Flow is usually the simplest: create a short-lived feature branch off main, open a pull request, review, and merge back into main, which stays deployable at all times."
+  - question: "What is trunk-based development?"
+    answer: "Trunk-based development means developers commit small, frequent changes directly to a single shared branch (the trunk), often behind feature flags, avoiding long-lived feature branches and the merge conflicts they tend to accumulate."
+  - question: "Why does Git Flow use both a develop and a main branch?"
+    answer: "Git Flow separates ongoing development (develop) from released, production-ready code (main), using dedicated release and hotfix branches to manage the process of stabilizing and shipping a version."
+  - question: "How long should a feature branch live?"
+    answer: "As short as practically possible. Long-lived feature branches drift further from main over time, making eventual merges harder and increasing the risk of conflicts; most teams aim for branches that live hours to a few days."
+references:
+  - title: "Git Docs — Branching"
+    url: "https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell"
+  - title: "GitHub Docs — GitHub flow"
+    url: "https://docs.github.com/en/get-started/using-github/github-flow"
+  - title: "Atlassian — Comparing workflows"
+    url: "https://www.atlassian.com/git/tutorials/comparing-workflows"
+---
+
+## Introduction
+
+Git gives you branches; it does not tell you how to use them. Over the years, several named branching strategies have emerged, each trading off simplicity against control over releases. Choosing the right one for your team's size and release cadence matters more than following whichever strategy is currently trendy. This guide walks through the three most common approaches.
+
+## Why Branching Strategy Matters
+
+Without an agreed-upon strategy, teams tend to drift into ad hoc chaos: some branches live for months, some commits go straight to `main`, and nobody is quite sure which branch represents what is actually running in production. A clear strategy answers three questions consistently: where does new work start, how does it get reviewed, and how does it reach production.
+
+## GitHub Flow: Simple and Continuous
+
+GitHub Flow is built around a single long-lived branch, `main`, which is always deployable. Every change starts as a short-lived branch off `main`:
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/add-search-bar
+
+# make changes, commit
+git push -u origin feature/add-search-bar
+# open a pull request, get it reviewed, merge into main
+```
+
+Once merged, the feature branch is deleted, and `main` is deployed. This model fits teams that deploy frequently — often multiple times a day — and do not need to support multiple older release versions simultaneously.
+
+```text
+main:      A---B-------------E---F   (always deployable)
+                \           /
+feature:         C----D----/
+```
+
+## Git Flow: Structured Releases
+
+Git Flow adds more branches and more ceremony, designed for projects that ship versioned releases rather than deploying continuously:
+
+- **main** — reflects the latest production release only.
+- **develop** — integration branch where completed features accumulate.
+- **feature/\*** — branched from `develop`, merged back into `develop`.
+- **release/\*** — branched from `develop` to stabilize a version before release.
+- **hotfix/\*** — branched from `main` to patch production urgently, merged into both `main` and `develop`.
+
+```bash
+git checkout develop
+git checkout -b feature/user-profile
+# ... work, commit, merge back into develop when done
+
+git checkout develop
+git checkout -b release/2.4.0
+# stabilize: bug fixes only, no new features
+git checkout main
+git merge release/2.4.0
+git tag v2.4.0
+git checkout develop
+git merge release/2.4.0
+```
+
+Git Flow's structure is valuable for software with distinct, numbered releases — desktop applications, libraries, embedded firmware — but it adds overhead that most continuously-deployed web applications do not need.
+
+## Trunk-Based Development: Minimal Branching
+
+Trunk-based development goes the opposite direction from Git Flow: developers commit small, frequent changes directly to a single shared branch (the "trunk," usually `main`), often gated behind feature flags rather than long-lived branches:
+
+```bash
+git checkout main
+git pull origin main
+# make a small change
+git commit -am "Add feature flag for new checkout flow"
+git push origin main
+```
+
+Unfinished features stay hidden behind a flag until ready, rather than living in an unmerged branch:
+
+```javascript
+if (featureFlags.newCheckoutFlow) {
+  renderNewCheckout();
+} else {
+  renderLegacyCheckout();
+}
+```
+
+This approach requires strong automated testing and continuous integration discipline, since almost every commit lands directly on the branch that gets deployed, but it minimizes merge conflicts by keeping branch lifetimes extremely short.
+
+## Comparing the Three Strategies
+
+```text
+GitHub Flow:      Simple, PR-based, one deployable branch. Good default for most teams.
+Git Flow:         More structure, supports parallel releases. Good for versioned software.
+Trunk-Based:      Minimal branching, feature flags. Good for high-velocity teams with strong CI.
+```
+
+## A Practical Recommendation
+
+For most web application teams deploying continuously, GitHub Flow (short feature branches, pull requests, merge to `main`, deploy) offers the best balance of simplicity and safety. Reach for Git Flow specifically when you need to support multiple released versions in parallel — for example, patching version 2.x while actively developing version 3.x. Consider trunk-based development once your team has strong CI, automated test coverage, and feature-flag infrastructure in place, and long-lived branches have become a genuine bottleneck.
+
+## Best Practices
+
+- Keep feature branches short-lived, ideally merged within a few days, to minimize conflicts with `main`.
+- Protect your main branch with required reviews and passing CI checks before merging.
+- Delete branches after merging to keep the repository's branch list manageable.
+- Write descriptive branch names (`feature/add-search-bar`, `fix/checkout-crash`) that convey intent at a glance.
+- Rebase or merge `main` into your feature branch periodically on longer-lived branches to avoid a painful conflict resolution at the end.
+
+## Common Mistakes to Avoid
+
+- Letting feature branches live for weeks or months, accumulating drift that makes the eventual merge painful.
+- Adopting Git Flow's full ceremony for a small team shipping continuously, adding overhead without a matching need for parallel release support.
+- Committing directly to `main` without any review process on a team where that increases risk.
+- Mixing multiple unrelated features into a single branch, making the resulting pull request hard to review and revert if needed.
+
+## Naming Conventions and Protecting Branches
+
+Beyond choosing a strategy, a small set of conventions make any branching model easier to follow in practice. Prefixing branch names by type — `feature/`, `fix/`, `chore/` — makes a repository's branch list scannable at a glance, and often integrates with CI configuration that behaves differently based on the prefix:
+
+```bash
+git checkout -b feature/user-profile-page
+git checkout -b fix/checkout-total-rounding
+git checkout -b chore/upgrade-eslint-config
+```
+
+Equally important is configuring branch protection rules on your main branch (or release branches) in GitHub or GitLab: requiring pull request review before merging, requiring status checks (tests, linting) to pass, and disabling direct pushes. These rules turn "please don't push directly to main" from a team norm that someone will eventually forget, into something the platform actively enforces, which matters far more as a team grows beyond a size where everyone can informally track what everyone else is doing. Combined with a clear branching strategy, protected branches ensure that whatever ends up on `main` has actually been reviewed and passed CI, regardless of which specific workflow — GitHub Flow, Git Flow, or trunk-based — a team has chosen to use.
+
+It's also worth deciding, as a team, how long feature branches are allowed to live before being merged or deleted. Long-lived branches drift further and further from `main` the longer they exist, which makes eventually merging them progressively riskier and more conflict-prone. Encouraging small, frequently-merged branches — even if that means splitting a large feature into several sequential pull requests behind a temporary feature flag — tends to produce far fewer painful merge conflicts than a handful of sprawling branches that each try to land weeks of work at once.
+
+Whatever strategy a team picks, documenting it explicitly — a short paragraph in the repository's contributing guide describing branch naming, when to merge versus rebase, and how releases are cut — pays for itself the first time a new team member joins and needs to understand the conventions without guessing from observed behavior alone.
+
+It's also worth revisiting the chosen strategy periodically rather than treating it as a permanent decision made once at a project's founding. A strategy that fit a five-person team shipping weekly can start to feel like unnecessary overhead — or, in the opposite direction, dangerously informal — once that same team grows to twenty people shipping multiple times a day, and being willing to adjust the process as the team's actual shape changes matters more than loyalty to whichever workflow was chosen first.
+
+## Conclusion
+
+There is no universally "correct" branching strategy — only strategies that fit different release cadences and team sizes. Start with the simplest approach that matches how often you actually deploy, and only add structure (like Git Flow's release branches) when a real, recurring need justifies the added complexity.

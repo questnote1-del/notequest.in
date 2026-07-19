@@ -1,0 +1,220 @@
+---
+title: "CSS Flexbox: The Complete Guide"
+description: "A complete, practical guide to CSS Flexbox covering the main and cross axis, justify-content, align-items, flex-grow/shrink/basis, and common layout patterns."
+category: css
+tags: ["css", "flexbox", "layout", "responsive-design"]
+author: priya-sharma
+publishedAt: "2025-04-01"
+updatedAt: "2025-06-15"
+featured: true
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the difference between justify-content and align-items?"
+    answer: "justify-content controls alignment along the main axis (horizontal by default, in a row-direction flex container), while align-items controls alignment along the cross axis (vertical by default), perpendicular to the main axis."
+  - question: "What does flex: 1 actually mean?"
+    answer: "flex: 1 is shorthand for flex-grow: 1, flex-shrink: 1, and flex-basis: 0%, meaning the item can grow and shrink to fill available space, starting from a base size of zero rather than its natural content size."
+  - question: "How do I center something perfectly with Flexbox?"
+    answer: "Set display: flex on the container, then justify-content: center to center along the main axis and align-items: center to center along the cross axis, which together center the content both horizontally and vertically."
+  - question: "When should I use Flexbox instead of Grid?"
+    answer: "Flexbox is best for one-dimensional layouts — arranging items in a single row or column — while Grid excels at two-dimensional layouts where you need to control both rows and columns simultaneously."
+references:
+  - title: "MDN — Flexbox"
+    url: "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_flexible_box_layout"
+  - title: "MDN — Basic concepts of flexbox"
+    url: "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_flexible_box_layout/Basic_concepts_of_flexbox"
+  - title: "CSS-Tricks — A Complete Guide to Flexbox"
+    url: "https://css-tricks.com/snippets/css/a-guide-to-flexbox/"
+---
+
+## Introduction
+
+Before Flexbox, centering an element vertically in CSS was a running joke about how unnecessarily difficult basic layout could be. Flexbox changed that by giving CSS a proper one-dimensional layout model, with built-in tools for alignment, spacing, and flexible sizing. This guide covers the core Flexbox concepts you will use in nearly every layout you build.
+
+## Turning On Flexbox
+
+```css
+.container {
+  display: flex;
+}
+```
+
+The moment you set `display: flex` on an element, its direct children become "flex items" and immediately arrange themselves in a row, all stretched to the same height, with no extra code required.
+
+## The Main Axis and Cross Axis
+
+Flexbox thinks in terms of two axes: the main axis (the direction items flow) and the cross axis (perpendicular to it). By default, the main axis is horizontal, but `flex-direction` can flip that:
+
+```css
+.container {
+  display: flex;
+  flex-direction: row;    /* default: left to right */
+  /* flex-direction: column; would make the main axis vertical */
+}
+```
+
+Every alignment property in Flexbox depends on which axis is currently the "main" one, which is the single biggest source of confusion for beginners — always check `flex-direction` first when alignment does not behave as expected.
+
+## justify-content: Aligning Along the Main Axis
+
+```css
+.container {
+  display: flex;
+  justify-content: flex-start;    /* default */
+  justify-content: center;
+  justify-content: space-between; /* first/last items touch the edges */
+  justify-content: space-around;  /* equal space around each item */
+  justify-content: space-evenly;  /* perfectly equal spacing everywhere */
+}
+```
+
+## align-items: Aligning Along the Cross Axis
+
+```css
+.container {
+  display: flex;
+  align-items: stretch;    /* default: items fill the container's height */
+  align-items: flex-start;
+  align-items: center;
+  align-items: flex-end;
+  align-items: baseline;
+}
+```
+
+Combining both gives you the classic "perfect centering" recipe:
+
+```css
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+```
+
+## flex-grow, flex-shrink, and flex-basis
+
+These three properties, usually written together as the `flex` shorthand, control how individual items resize relative to each other:
+
+```css
+.sidebar {
+  flex: 0 0 250px; /* don't grow, don't shrink, start at 250px */
+}
+.main-content {
+  flex: 1 1 0%; /* grow and shrink to fill remaining space */
+}
+```
+
+```html
+<div style="display: flex;">
+  <div class="sidebar">Sidebar</div>
+  <div class="main-content">Main content fills the rest</div>
+</div>
+```
+
+`flex: 1` (shorthand for `flex: 1 1 0%`) is one of the most useful one-liners in CSS: it tells an item to grow and shrink freely to consume any leftover space in the container.
+
+## flex-wrap: Handling Overflow
+
+By default, flex items shrink to fit on a single line, even if that squeezes them uncomfortably small. `flex-wrap` lets items overflow onto additional lines instead:
+
+```css
+.container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.card {
+  flex: 1 1 250px; /* grow/shrink, but never smaller than ~250px per row */
+}
+```
+
+This single pattern — `flex-wrap: wrap` plus a `flex-basis` on the children — creates a responsive card grid without a single media query.
+
+## Aligning a Single Item Differently: align-self
+
+```css
+.container {
+  display: flex;
+  align-items: center;
+}
+.special-item {
+  align-self: flex-start; /* overrides align-items just for this item */
+}
+```
+
+## order: Reordering Without Changing HTML
+
+```css
+.item-a { order: 2; }
+.item-b { order: 1; }
+/* item-b now appears visually before item-a, regardless of source order */
+```
+
+Use `order` sparingly — reordering visually without reordering the underlying HTML can create a mismatch between visual order and the order announced to screen readers or encountered via keyboard tabbing.
+
+## A Practical Navbar Example
+
+```css
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+}
+.nav-links {
+  display: flex;
+  gap: 1.5rem;
+}
+```
+
+```html
+<nav class="navbar">
+  <div class="logo">MySite</div>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+    <a href="/contact">Contact</a>
+  </div>
+</nav>
+```
+
+## Best Practices
+
+- Set `flex-direction` deliberately and remember it flips the meaning of `justify-content` and `align-items`.
+- Use `gap` on the flex container for spacing between items instead of margins, which avoids extra spacing at the container's edges.
+- Prefer `flex: 1` for "fill remaining space" items instead of manually calculating percentages.
+- Use `flex-wrap` with a sensible `flex-basis` for simple responsive grids before reaching for CSS Grid or media queries.
+- Avoid using `order` purely for visual effect when it would create a mismatch with logical/keyboard tab order.
+
+## Common Mistakes to Avoid
+
+- Forgetting that `justify-content` and `align-items` swap roles when `flex-direction` is `column`.
+- Using margins for spacing between flex items instead of the simpler, more consistent `gap` property.
+- Applying flex properties to an element that is not actually a flex item (i.e., its parent is missing `display: flex`).
+- Overusing `order` for layout reasons that would be better solved by simply changing the HTML source order.
+
+## Controlling Wrapping and Gaps
+
+By default, flex items shrink to fit on a single line, which is not always what you want for something like a row of tags or filter chips that should wrap naturally onto multiple lines as the container narrows. `flex-wrap: wrap` combined with the `gap` property handles this cleanly without any manual margin math:
+
+```css
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px; /* consistent spacing on both axes, works with wrapping */
+}
+```
+
+Before `gap` was well-supported on flex containers, spacing between items required margins on each child, which caused headaches at the edges of the container — the last item in a row would have unwanted trailing margin, requiring `:last-child` overrides or negative-margin tricks on the container itself. `gap` sidesteps all of that by applying spacing purely between items, never on the outer edges, and it works consistently whether the items wrap onto one line or several. Combined with `flex-wrap: wrap`, this pattern — a flex container with a gap and no explicit widths on its children — is one of the simplest ways to build a naturally responsive row of items that reflows automatically as the viewport changes, without a single media query.
+
+The `flex-basis`, `flex-grow`, and `flex-shrink` shorthand `flex` is worth understanding individually rather than only copying common combinations like `flex: 1`. `flex-basis` sets an item's starting size before growing or shrinking is applied, `flex-grow` controls how much of the remaining extra space an item claims relative to its siblings, and `flex-shrink` controls how readily an item gives up space when the container is too small to fit everyone at their preferred size. Understanding these three independently makes it much easier to reason about why a particular flex item is behaving unexpectedly, rather than treating `flex: 1` as an unexplained magic incantation.
+
+The `align-self` property is worth knowing as an escape hatch for the common case where every item in a row should align one way except for a single outlier — rather than restructuring the whole container's `align-items` value, `align-self` overrides cross-axis alignment for just that one item, leaving the container's default behavior untouched for everything else.
+
+The `order` property lets you visually reorder flex items independently of their position in the underlying HTML source, which can be useful for reordering content at different breakpoints without duplicating markup — though it's worth using sparingly, since visual order that diverges from source order can create a confusing experience for keyboard and screen reader users, who still navigate in the original source order regardless of how `order` rearranges things visually.
+
+## Conclusion
+
+Flexbox turns what used to require table hacks or fragile floats into a small, composable set of properties: pick a direction, align along both axes, and let items grow or shrink as needed. Once the main-axis/cross-axis mental model clicks, most one-dimensional layout problems — navbars, card rows, centered content, sidebars — become quick to build correctly.

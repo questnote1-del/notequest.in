@@ -1,0 +1,155 @@
+---
+title: "Memory Management Basics in Operating Systems"
+description: "Learn the fundamentals of operating system memory management, including virtual memory, paging, the stack versus the heap, and how memory leaks occur."
+category: operating-systems
+tags: ["operating-systems", "memory-management", "virtual-memory", "fundamentals"]
+author: neha-patel
+publishedAt: "2026-02-14"
+updatedAt: "2026-03-07"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is virtual memory?"
+    answer: "Virtual memory is an abstraction that gives each process its own private address space, letting the operating system map that virtual space onto physical RAM (and disk) as needed, so processes do not need to know or coordinate about physical memory addresses directly."
+  - question: "What is the difference between the stack and the heap?"
+    answer: "The stack stores local variables and function call information with a fixed, predictable layout and automatic cleanup when a function returns, while the heap stores dynamically allocated data with a flexible lifetime that must be explicitly freed or garbage collected."
+  - question: "What is paging?"
+    answer: "Paging divides memory into fixed-size blocks called pages, allowing the operating system to map a process's virtual pages to physical memory frames independently, which enables features like swapping unused pages to disk and avoids requiring contiguous physical memory for a process."
+  - question: "What causes a memory leak?"
+    answer: "A memory leak happens when a program allocates memory but loses every reference to it without freeing it, so that memory becomes permanently unusable for the remainder of the program's execution, gradually increasing memory usage over time."
+references:
+  - title: "MDN — Memory management"
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Memory_management"
+  - title: "GeeksforGeeks — Memory Management in OS"
+    url: "https://www.geeksforgeeks.org/operating-systems/memory-management-in-operating-system/"
+  - title: "GeeksforGeeks — Paging in Operating System"
+    url: "https://www.geeksforgeeks.org/operating-systems/paging-in-operating-system/"
+---
+
+## Introduction
+
+Every running program needs memory, and operating systems have to juggle giving every process the memory it needs while keeping processes isolated from each other and making efficient use of a limited amount of physical RAM. Memory management is the set of techniques that make this possible, and understanding the basics — virtual memory, paging, stack versus heap — explains a surprising amount of everyday programming behavior, from stack overflow errors to memory leaks.
+
+## Virtual Memory: An Illusion Worth Understanding
+
+Modern operating systems give every process the illusion of having its own full, private address space, starting at address zero, regardless of how much physical RAM is actually installed or how many other processes are running. This is virtual memory.
+
+```text
+Process A's virtual address 0x1000  -> mapped to physical RAM address 0x7A3000
+Process B's virtual address 0x1000  -> mapped to physical RAM address 0x2B1000
+```
+
+Two processes can use the exact same virtual address and never conflict, because the operating system's memory management unit translates each process's virtual addresses to different physical addresses behind the scenes. This is also what makes memory isolation between processes possible — one process simply has no way to address another process's physical memory directly.
+
+## Paging: Dividing Memory into Manageable Chunks
+
+Rather than mapping virtual memory to physical memory as one giant contiguous block, operating systems divide memory into fixed-size chunks called pages (in virtual memory) and frames (in physical memory), typically 4KB each:
+
+```text
+Virtual pages:    [Page 0] [Page 1] [Page 2] [Page 3]
+                     |         |        |        |
+Physical frames:  [Frame 12][Frame 3][Frame 45][Frame 7]
+```
+
+This indirection means a process's memory does not need to be physically contiguous at all — pages can be scattered anywhere in physical RAM, and the operating system's page table keeps track of exactly where each virtual page currently lives.
+
+## Swapping: When RAM Runs Out
+
+When physical RAM fills up, the operating system can temporarily move rarely used pages out to disk (a much slower but much larger storage medium), freeing up RAM for actively used pages. This is called swapping, and it explains why a system with too little RAM feels drastically slower under memory pressure — accessing a page that has been swapped out requires a slow disk read before the process can continue.
+
+```text
+Page accessed frequently   -> stays in RAM (fast access)
+Page not accessed recently -> may be swapped out to disk (slow to bring back)
+```
+
+## The Stack: Fast, Automatic, and Limited
+
+Every thread has its own stack, used for local variables and tracking function calls. It grows and shrinks automatically as functions are called and return, and its layout is simple and predictable:
+
+```javascript
+function calculateTotal(price, quantity) {
+  const subtotal = price * quantity; // lives on the stack
+  return subtotal;
+} // subtotal is automatically removed from the stack when the function returns
+```
+
+Because the stack has a fixed maximum size, deeply nested or infinite recursion can exhaust it entirely, producing a "stack overflow" error:
+
+```javascript
+function recurseForever(n) {
+  return recurseForever(n + 1); // never returns, keeps growing the stack
+}
+recurseForever(0); // eventually: RangeError: Maximum call stack size exceeded
+```
+
+## The Heap: Flexible, but Manually (or Garbage-Collected) Managed
+
+The heap stores data whose size or lifetime is not known at compile time, or that needs to outlive the function that created it. In languages like C, the programmer must explicitly allocate and free heap memory; in JavaScript, Python, Java, and most modern languages, a garbage collector automates this by tracking which allocated objects are still reachable and reclaiming the ones that are not.
+
+```javascript
+function createUser(name) {
+  return { name, createdAt: new Date() }; // object lives on the heap
+} // the object survives after the function returns, as long as something references it
+
+let user = createUser("Ada");
+user = null; // no more references to the object -- eligible for garbage collection
+```
+
+## How Memory Leaks Happen (Even with Garbage Collection)
+
+A memory leak in a garbage-collected language does not mean memory is "lost" the way it can be in C — it means something is still holding a reference to memory that is no longer actually needed, so the garbage collector cannot reclaim it, even though your program has effectively finished using it.
+
+```javascript
+const cache = [];
+
+function trackEvent(event) {
+  cache.push(event); // never removed -- grows forever
+}
+```
+
+If `cache` keeps growing indefinitely with no eviction policy, memory usage climbs steadily over time even though the garbage collector is working correctly — it simply cannot free memory that your own code still references.
+
+## Segmentation Faults and Access Violations
+
+When a program tries to access memory it does not have permission to access — a common bug in memory-unsafe languages like C — the operating system intervenes, typically terminating the process rather than letting it corrupt memory belonging to another process:
+
+```text
+Attempted access to invalid or protected memory address
+  -> Operating system detects the violation
+  -> Process is terminated with a "segmentation fault"
+```
+
+Memory-safe, garbage-collected languages largely eliminate this specific category of bug by preventing direct manipulation of raw memory addresses in the first place.
+
+## Best Practices
+
+- Understand the stack's fixed size limit and avoid unbounded recursion, especially without a base case.
+- In garbage-collected languages, watch for unintentionally growing collections (caches, event listener lists, global arrays) that hold references indefinitely.
+- Use profiling tools (heap snapshots, memory profilers) to identify actual leaks rather than guessing based on symptoms alone.
+- Remove event listeners and clear timers/intervals when they are no longer needed, since these are common, easy-to-miss sources of lingering references.
+
+## Common Mistakes to Avoid
+
+- Assuming garbage collection makes memory leaks impossible — it only reclaims memory that is truly unreachable, not memory your code still (perhaps accidentally) references.
+- Writing deep or unbounded recursion without considering the stack's fixed size limit.
+- Forgetting to clean up subscriptions, timers, or listeners, letting them silently accumulate over the lifetime of a long-running application.
+- Confusing virtual memory usage with actual physical RAM usage when interpreting system memory statistics — a process can reserve a large virtual address space without actively using that much physical memory.
+
+## Fragmentation: Why Free Memory Isn't Always Usable Memory
+
+A subtlety that trips up even experienced developers is that a system can report plenty of free memory while still failing to satisfy a large allocation request. This happens because of fragmentation — free memory scattered in many small, non-contiguous chunks rather than one large contiguous block:
+
+```text
+Memory layout (used = X, free = .):
+[XXX...XX....XXX..X...XXX....XX...]
+Total free: significant, but no single contiguous run is large enough
+for one big allocation request.
+```
+
+External fragmentation like this typically results from a long-running process repeatedly allocating and freeing blocks of varying sizes, leaving behind a scattered patchwork of small gaps between still-allocated blocks. Modern memory allocators mitigate this with strategies like splitting and coalescing — merging adjacent free blocks back together whenever memory is freed — but fragmentation can never be eliminated entirely for a program with a sufficiently irregular and long-running allocation pattern. Virtual memory helps here too: because a process's virtual address space is not the same as physical memory, the operating system can present a process with the appearance of a large contiguous block even when the underlying physical pages are scattered across RAM, as long as the page table correctly maps each virtual page to wherever its physical page actually lives. This is one of several reasons virtual memory exists beyond simply allowing programs to use more memory than physically installed.
+
+## Conclusion
+
+Memory management sits quietly underneath almost everything a program does, and while modern languages and operating systems hide most of the complexity, understanding virtual memory, paging, and the stack/heap distinction explains real, everyday phenomena: why deep recursion crashes, why an unbounded cache is dangerous even with garbage collection, and why a system with too little RAM grinds to a halt under load.

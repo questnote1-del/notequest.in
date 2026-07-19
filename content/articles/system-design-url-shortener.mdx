@@ -1,0 +1,172 @@
+---
+title: "System Design: Designing a URL Shortener"
+description: "A step-by-step system design walkthrough for building a URL shortener like bit.ly, covering requirements, encoding strategies, database schema, and scaling c..."
+category: system-design
+tags: ["system-design", "url-shortener", "scalability", "interview-prep"]
+author: arjun-mehta
+publishedAt: "2025-10-31"
+updatedAt: "2025-12-09"
+featured: true
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "How do URL shorteners generate short codes?"
+    answer: "Common approaches include base62-encoding an auto-incrementing counter, hashing the original URL and taking a truncated portion, or generating a random string and checking it for collisions before assigning it to a new URL."
+  - question: "Why is base62 encoding commonly used instead of base10?"
+    answer: "Base62 uses digits, lowercase, and uppercase letters (62 characters total), producing much shorter codes for the same range of numbers compared to base10, which only uses digits 0 through 9."
+  - question: "How should a URL shortener handle redirects at scale?"
+    answer: "Serve redirects from a fast key-value cache in front of the primary database, since redirect lookups vastly outnumber URL creations in a typical usage pattern, and cache hits avoid a full database round trip for the majority of requests."
+  - question: "What HTTP status code should a redirect use, 301 or 302?"
+    answer: "A 302 (temporary redirect) is usually preferred for shortened URLs because it tells browsers not to cache the redirect permanently, which keeps analytics tracking accurate and allows the destination to be changed later if needed."
+references:
+  - title: "MDN — HTTP redirections"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections"
+  - title: "AWS — What is a Content Delivery Network"
+    url: "https://aws.amazon.com/what-is/cdn/"
+  - title: "MDN — HTTP caching"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+---
+
+## Introduction
+
+"Design a URL shortener" is one of the most common system design interview questions, precisely because it looks simple on the surface but touches nearly every core system design concept: encoding schemes, database design, caching, and scaling reads versus writes. This guide walks through designing a service like bit.ly from requirements to a scalable architecture.
+
+## Step 1: Clarify Requirements
+
+Before designing anything, pin down the scope:
+
+**Functional requirements:**
+- Given a long URL, generate a unique, short alias.
+- Given a short alias, redirect the user to the original long URL.
+- Optionally support custom aliases and link expiration.
+
+**Non-functional requirements:**
+- High availability — redirects should almost never fail.
+- Low latency — redirects should feel instantaneous.
+- Reads vastly outnumber writes: shortened links are created once but clicked many times.
+
+## Step 2: Estimate Scale
+
+Rough back-of-envelope numbers shape every later decision. Suppose the service creates 10 million new short URLs per month, and each one is clicked 100 times on average over its lifetime:
+
+```text
+Writes:  10,000,000 / month  ≈ ~4 URLs created per second (average)
+Reads:   1,000,000,000 / month ≈ ~400 redirects per second (average)
+```
+
+The read-to-write ratio (roughly 100:1 here) immediately tells you: optimize aggressively for fast reads, and caching will matter far more than write throughput.
+
+## Step 3: Choosing a Short Code Strategy
+
+**Option A: Base62 encode an auto-incrementing ID.**
+
+```javascript
+const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+function encodeBase62(num) {
+  if (num === 0) return ALPHABET[0];
+  let result = "";
+  while (num > 0) {
+    result = ALPHABET[num % 62] + result;
+    num = Math.floor(num / 62);
+  }
+  return result;
+}
+
+console.log(encodeBase62(125)); // "21"
+```
+
+A database-generated auto-incrementing ID, base62-encoded, guarantees uniqueness without any coordination between servers, and 7 characters of base62 can represent over 3.5 trillion unique values — plenty of headroom.
+
+**Option B: Hash the URL and truncate.** Hashing (e.g., with MD5 or SHA-256) and taking the first few characters is simple but requires collision handling, since different URLs can produce colliding truncated hashes.
+
+**Option C: Generate a random string and check for collisions.** Simple to implement, but requires a uniqueness check against the database on every creation, adding latency and occasional retries.
+
+The auto-increment-plus-base62 approach is usually the cleanest: no collisions are possible by construction, and no extra lookup is required before assigning a new code.
+
+## Step 4: Database Schema
+
+```sql
+CREATE TABLE urls (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  short_code VARCHAR(10) UNIQUE NOT NULL,
+  long_url TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NULL,
+  click_count BIGINT DEFAULT 0
+);
+
+CREATE INDEX idx_urls_short_code ON urls (short_code);
+```
+
+The index on `short_code` is what makes redirect lookups fast — this is the single most frequently queried column in the entire system, by a wide margin.
+
+## Step 5: The Redirect Path
+
+```text
+1. User visits short.ly/21
+2. Load balancer routes the request to an application server
+3. Server checks a cache (e.g., Redis) for key "21"
+   - Cache hit  -> return the long URL immediately, respond with 302
+   - Cache miss -> query the database, populate the cache, respond with 302
+4. Asynchronously increment click_count (don't block the redirect on this)
+```
+
+Because redirects vastly outnumber creations, putting a cache directly in front of the database for lookups is the highest-leverage optimization in the whole design — most requests should never even reach the primary database.
+
+## Step 6: Scaling Beyond a Single Server
+
+As traffic grows, several standard techniques apply:
+
+- **Horizontal scaling of application servers** behind a load balancer, since the redirect logic itself is stateless.
+- **Read replicas** for the database, since reads dominate writes by a large margin.
+- **A CDN or edge cache** for extremely popular links, serving redirects from locations physically closer to users.
+- **Sharding the ID generation** (e.g., assigning each application server a reserved range of IDs, or using a dedicated ID-generation service) if a single auto-increment column becomes a bottleneck at very high write volume.
+
+## Step 7: Handling Custom Aliases and Expiration
+
+Custom aliases require a uniqueness check against existing codes before insertion, since they cannot rely on the auto-increment encoding scheme:
+
+```sql
+INSERT INTO urls (short_code, long_url)
+VALUES ('my-custom-link', 'https://example.com/very/long/path')
+ON CONFLICT (short_code) DO NOTHING;
+```
+
+Expired links can be filtered out at read time (`WHERE expires_at IS NULL OR expires_at > NOW()`) or cleaned up periodically by a background job, depending on how strictly "expired" needs to be enforced.
+
+## Best Practices
+
+- Design explicitly around the read-heavy access pattern — most of the value in this system comes from caching redirects effectively.
+- Use a collision-free encoding strategy (like base62 of an auto-incrementing ID) rather than one that requires collision checks on every write.
+- Keep the redirect path as simple and fast as possible; push non-critical work (like click analytics) to an asynchronous process.
+- Index the lookup column and monitor cache hit rates as the primary health signal for the system's performance.
+
+## Common Mistakes to Avoid
+
+- Over-engineering the ID generation with distributed coordination before confirming a single auto-increment counter is actually a bottleneck.
+- Forgetting to cache redirects, forcing every single click to hit the primary database directly.
+- Blocking the redirect response on incrementing click counts or writing analytics events synchronously.
+- Choosing a random-string generation strategy without accounting for the extra database round trip needed to check for collisions.
+
+## Handling Custom Aliases and Expiration
+
+Two features that real-world URL shorteners almost always need, beyond basic shorten-and-redirect, are custom aliases (letting a user pick their own short code, like `/promo2026`) and expiration (automatically invalidating a link after a set time or click count). Both are relatively small additions to the core design, but each introduces its own edge case to handle carefully:
+
+```text
+POST /api/shorten
+{
+  "longUrl": "https://example.com/summer-sale",
+  "customAlias": "summer-sale",   // optional
+  "expiresAt": "2026-09-01T00:00:00Z"  // optional
+}
+```
+
+Custom aliases require checking for collisions against both auto-generated codes and other custom aliases before accepting the request — typically enforced with a unique index on the short-code column, so the database itself rejects a duplicate rather than relying on an application-level check that could race under concurrent requests. Expiration is usually implemented as a simple `expiresAt` timestamp column checked at redirect time, with a background job periodically sweeping and deleting (or archiving) expired rows so the active dataset — and therefore the working set that needs to stay cache-resident — does not grow unbounded with dead links. Both features are good examples of a broader system design principle: the "happy path" of a system is often the easiest 20% of the design work, while edge cases like uniqueness guarantees and lifecycle management are where most of the real engineering effort and interview discussion actually happens.
+
+Analytics — tracking how many times a given short link was clicked, and from where — is another feature interviewers often probe, since it introduces a genuine write-scaling problem: a viral link can receive far more click events than the shortener's core redirect traffic alone would suggest. Rather than synchronously writing an analytics record on every single redirect (which would slow down the redirect itself, the one operation that must stay fast), a common approach is publishing a lightweight click event to a message queue and processing it asynchronously, keeping the critical redirect path fast while still capturing accurate analytics slightly after the fact.
+
+## Conclusion
+
+A URL shortener is a small system with a large, read-heavy traffic pattern, which makes it an excellent vehicle for practicing the core system design skills: estimating scale, choosing the right data structures, indexing correctly, and caching aggressively where the access pattern demands it. The same read-heavy caching principles used here apply directly to countless other real-world systems.

@@ -1,0 +1,219 @@
+---
+title: "Next.js Server Components Explained"
+description: "Understand React Server Components in Next.js: what runs on the server versus the client, how they reduce bundle size, and how to combine them with Client Co..."
+category: nextjs
+tags: ["nextjs", "server-components", "react", "rendering"]
+author: priya-sharma
+publishedAt: "2024-07-27"
+updatedAt: "2024-09-02"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Are Server Components the same as server-side rendering?"
+    answer: "No. Server-side rendering (SSR) means generating HTML on the server for a page that still ships full component code to the client. Server Components render on the server and never ship their component code to the browser at all."
+  - question: "Can a Server Component import a Client Component?"
+    answer: "Yes, and this is the normal pattern: Server Components handle data fetching and static structure, and they render Client Components for the specific pieces of UI that need interactivity."
+  - question: "Can a Client Component import a Server Component directly?"
+    answer: "No, not directly as a plain import. A Client Component can only receive a Server Component as children or props that were rendered by a parent Server Component and passed down."
+  - question: "Do Server Components support hooks like useState?"
+    answer: "No. Server Components run once on the server and never re-render on the client, so stateful hooks like useState and useEffect are not available there — they only work inside files marked with 'use client'."
+references:
+  - title: "Next.js Docs — Server and Client Components"
+    url: "https://nextjs.org/docs/app/building-your-application/rendering/server-components"
+  - title: "React Docs — Server Components"
+    url: "https://react.dev/reference/rsc/server-components"
+  - title: "Next.js Docs — Composition Patterns"
+    url: "https://nextjs.org/docs/app/building-your-application/rendering/composition-patterns"
+---
+
+## Introduction
+
+React Server Components are one of the most significant shifts in how React applications are built, and Next.js's App Router adopted them as the default. The core idea is simple to state but has deep consequences: some components can run exclusively on the server, sending only the resulting HTML to the browser, while others still run in the browser for interactivity. Understanding where that line sits — and why it matters — is essential for building efficient Next.js apps.
+
+## What Makes a Component a "Server Component"
+
+In the App Router, every component is a Server Component by default. It runs only on the server, during the request (or at build time for static pages), and its JavaScript is never sent to the browser at all — only the rendered output is.
+
+```javascript
+// app/page.js — a Server Component by default
+async function getStats() {
+  const res = await fetch("https://api.example.com/stats");
+  return res.json();
+}
+
+export default async function HomePage() {
+  const stats = await getStats();
+  return <p>Total users: {stats.totalUsers}</p>;
+}
+```
+
+Notice that this component is `async` and calls `fetch` directly, without `useEffect` or a loading state. Server Components can `await` data right in the component body, because they run once on the server before any HTML is sent.
+
+## What Makes a Component a "Client Component"
+
+Adding `"use client"` at the top of a file marks that module — and everything it imports — as part of the client bundle. Client Components support state, effects, and browser APIs, and they hydrate in the browser exactly like a traditional React component:
+
+```javascript
+"use client";
+import { useState } from "react";
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>{count}</button>;
+}
+```
+
+## Why This Split Matters
+
+Every Client Component adds JavaScript to the bundle the browser has to download, parse, and execute. Server Components add zero JavaScript to that bundle — they only contribute the HTML they render. In a typical page with a lot of static content and a few interactive widgets (a like button, a dropdown, a form), keeping everything except those widgets as Server Components can dramatically shrink the amount of client-side JavaScript.
+
+Server Components also get direct, secure access to backend resources — databases, environment variables, internal APIs — without exposing that access to the browser, since their code never ships there.
+
+## Composing Server and Client Components
+
+The most common and recommended pattern is "Server Components at the top, Client Components at the leaves":
+
+```javascript
+// app/products/page.js (Server Component)
+import AddToCartButton from "./AddToCartButton"; // Client Component
+
+async function getProduct(id) {
+  const res = await fetch(`https://api.example.com/products/${id}`);
+  return res.json();
+}
+
+export default async function ProductPage({ params }) {
+  const product = await getProduct(params.id);
+  return (
+    <article>
+      <h1>{product.name}</h1>
+      <p>{product.description}</p>
+      <AddToCartButton productId={product.id} />
+    </article>
+  );
+}
+```
+
+```javascript
+// app/products/AddToCartButton.js
+"use client";
+import { useState } from "react";
+
+export default function AddToCartButton({ productId }) {
+  const [added, setAdded] = useState(false);
+  return (
+    <button onClick={() => setAdded(true)}>
+      {added ? "Added!" : "Add to cart"}
+    </button>
+  );
+}
+```
+
+`ProductPage` fetches data and renders static markup on the server; only the small `AddToCartButton` ships JavaScript to the browser.
+
+## Passing Data from Server to Client Components
+
+Props flow from Server Components into Client Components just like normal React props, but they must be serializable — you cannot pass functions, class instances, or other non-serializable values across that boundary:
+
+```javascript
+// Works: plain data
+<AddToCartButton productId={product.id} price={product.price} />
+
+// Does not work: passing a function defined on the server
+<AddToCartButton onAdd={() => saveToDatabase()} />
+```
+
+If a Client Component needs to trigger server-side logic, use a Server Action or an API route instead of trying to pass a server-only function directly as a prop.
+
+## The children Pattern
+
+A Client Component can still "contain" Server Components if a parent Server Component passes them in as `children`:
+
+```javascript
+"use client";
+export default function Modal({ children }) {
+  return <div className="modal">{children}</div>;
+}
+```
+
+```javascript
+// Server Component
+import Modal from "./Modal";
+import ProductDetails from "./ProductDetails"; // Server Component
+
+export default function Page() {
+  return (
+    <Modal>
+      <ProductDetails /> {/* still renders on the server */}
+    </Modal>
+  );
+}
+```
+
+## Best Practices
+
+- Default to Server Components; add `"use client"` only to the specific files that need interactivity or browser APIs.
+- Push Client Components as far down the tree ("to the leaves") as possible.
+- Fetch data directly inside Server Components instead of exposing extra API routes purely for the initial page load.
+- Keep secrets and direct database access inside Server Components only — never in files marked `"use client"`.
+- Use the `children` pattern to nest Server Components inside Client Components like modals or layouts when needed.
+
+## Common Mistakes to Avoid
+
+- Marking a whole page `"use client"` just because one small part needs interactivity, which pulls the entire subtree into the client bundle.
+- Trying to pass functions or non-serializable values as props from a Server Component into a Client Component.
+- Assuming Server Components support `useState` or `useEffect` — they do not, since they never run in the browser.
+- Forgetting that importing a Client Component file also pulls in everything that file imports as client code, even if some of it could have stayed server-only.
+
+## Streaming with Suspense
+
+Server Components unlock a powerful rendering technique: streaming parts of a page to the browser as soon as they are ready, instead of waiting for every piece of data to load before sending anything. Wrapping a slow-loading section in `Suspense` lets the rest of the page render immediately:
+
+```javascript
+import { Suspense } from "react";
+
+async function SlowRecommendations({ userId }) {
+  const recommendations = await getRecommendations(userId); // takes a while
+  return <RecommendationList items={recommendations} />;
+}
+
+export default function ProductPage({ params }) {
+  return (
+    <div>
+      <ProductDetails id={params.id} /> {/* renders fast */}
+      <Suspense fallback={<p>Loading recommendations...</p>}>
+        <SlowRecommendations userId={params.userId} />
+      </Suspense>
+    </div>
+  );
+}
+```
+
+The browser receives the fast-loading `ProductDetails` section immediately, along with the fallback for the slow section, and then Next.js streams in the actual `SlowRecommendations` markup once its data resolves, swapping it in without a full page reload. This means one slow data source no longer blocks the entire page from becoming visible and interactive, which can meaningfully improve perceived performance on pages that combine fast and slow data sources.
+
+## Passing Data Across the Server/Client Boundary
+
+A common point of confusion is exactly what can cross from a Server Component into a Client Component as a prop. The rule is straightforward once stated plainly: anything serializable — strings, numbers, plain objects, arrays — can be passed down, but functions, classes, and other non-serializable values generally cannot, because Client Components are rendered separately in the browser and props have to survive being sent over the network as data, not code:
+
+```jsx
+// Server Component
+async function ProductPage({ id }) {
+  const product = await getProduct(id); // runs on the server, never ships to the client
+  return <AddToCartButton product={product} />; // product is serializable, this is fine
+}
+
+// Client Component
+"use client";
+function AddToCartButton({ product }) {
+  const [added, setAdded] = useState(false);
+  return <button onClick={() => setAdded(true)}>Add {product.name}</button>;
+}
+```
+
+One important exception is Server Actions — async functions marked with `"use server"` — which Next.js specially serializes into a reference the client can call, effectively letting you pass "a function that runs on the server" down to a Client Component as if it were a normal prop. This is what powers form submissions and mutations that need to run server-side logic (like writing to a database) while still being triggered from client-side interactivity like a button click, without requiring you to manually wire up an API route for every single mutation in your application.
+
+## Conclusion
+
+Server Components shift the default assumption of React apps from "everything ships to the browser" to "only the interactive parts ship to the browser." Getting comfortable with this split — and deliberately choosing where to draw the `"use client"` boundary — is the single most impactful architectural decision in a modern Next.js application.

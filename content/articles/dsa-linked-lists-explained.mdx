@@ -1,0 +1,229 @@
+---
+title: "Linked Lists Explained"
+description: "A clear introduction to linked lists covering singly and doubly linked lists, common operations, and classic interview patterns like cycle detection and reve..."
+category: dsa
+tags: ["dsa", "linked-lists", "data-structures", "interview-prep"]
+author: neha-patel
+publishedAt: "2025-08-21"
+updatedAt: "2025-10-31"
+featured: false
+popular: true
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the main advantage of a linked list over an array?"
+    answer: "Inserting or removing an element at the beginning or middle of a linked list takes constant time once you have a reference to the right node, while an array requires shifting every subsequent element, taking linear time."
+  - question: "What is the main disadvantage of a linked list compared to an array?"
+    answer: "Linked lists do not support constant-time random access by index; finding the nth element requires walking through the list from the head, taking linear time, whereas arrays access any index directly in constant time."
+  - question: "How does Floyd's cycle detection algorithm work?"
+    answer: "It uses two pointers moving at different speeds, a slow pointer moving one node at a time and a fast pointer moving two nodes at a time. If the list contains a cycle, the fast pointer will eventually meet the slow pointer inside the loop."
+  - question: "What is a doubly linked list?"
+    answer: "A doubly linked list is a linked list where each node stores a reference to both the next and the previous node, allowing traversal in both directions, at the cost of extra memory per node for the additional pointer."
+references:
+  - title: "MDN — JavaScript data structures"
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Keyed_collections"
+  - title: "GeeksforGeeks — Linked List Data Structure"
+    url: "https://www.geeksforgeeks.org/dsa/linked-list-data-structure/"
+  - title: "GeeksforGeeks — Floyd's Cycle Detection Algorithm"
+    url: "https://www.geeksforgeeks.org/dsa/detect-loop-in-a-linked-list/"
+---
+
+## Introduction
+
+A linked list stores a sequence of elements the same way an array does, but instead of sitting in one contiguous block of memory, each element (a "node") holds a reference to the next one. That single structural difference gives linked lists a completely different set of trade-offs from arrays — and a completely different set of interview questions.
+
+## Anatomy of a Singly Linked List
+
+```javascript
+class ListNode {
+  constructor(value, next = null) {
+    this.value = value;
+    this.next = next;
+  }
+}
+
+const list = new ListNode(1, new ListNode(2, new ListNode(3)));
+// 1 -> 2 -> 3 -> null
+```
+
+There is no single block of memory holding "the list" — just a chain of independent node objects, each pointing to the next, ending in `null`.
+
+## Basic Operations
+
+```javascript
+class LinkedList {
+  constructor() {
+    this.head = null;
+  }
+
+  prepend(value) {
+    this.head = new ListNode(value, this.head); // O(1)
+  }
+
+  append(value) {
+    const node = new ListNode(value);
+    if (!this.head) {
+      this.head = node;
+      return;
+    }
+    let current = this.head;
+    while (current.next) current = current.next; // O(n)
+    current.next = node;
+  }
+
+  find(value) {
+    let current = this.head;
+    while (current) {
+      if (current.value === value) return current;
+      current = current.next;
+    }
+    return null; // O(n)
+  }
+
+  delete(value) {
+    if (!this.head) return;
+    if (this.head.value === value) {
+      this.head = this.head.next;
+      return;
+    }
+    let current = this.head;
+    while (current.next && current.next.value !== value) {
+      current = current.next;
+    }
+    if (current.next) current.next = current.next.next; // O(n)
+  }
+}
+```
+
+Prepending is O(1) because it only touches the head reference; appending, finding, and deleting a value are all O(n) in the worst case, since they may require walking the entire list.
+
+## Arrays vs Linked Lists
+
+```text
+Operation                | Array        | Linked List
+--------------------------|--------------|-------------
+Access by index           | O(1)         | O(n)
+Insert/delete at start     | O(n)         | O(1)
+Insert/delete at end       | O(1)*        | O(n) (O(1) with a tail pointer)
+Insert/delete in middle    | O(n)         | O(n) to find + O(1) to link
+Memory overhead            | Low          | Higher (extra pointer per node)
+
+* amortized, for dynamic arrays
+```
+
+Linked lists win specifically at insertion and deletion near the front, and lose specifically at random access — which is why they show up in problems explicitly designed around inserting, removing, or reordering nodes rather than looking things up by position.
+
+## Reversing a Linked List
+
+One of the most common linked list interview questions, solved with three pointers tracking the current node, the previous node, and a temporary reference to the next node:
+
+```javascript
+function reverseList(head) {
+  let prev = null;
+  let current = head;
+
+  while (current) {
+    const next = current.next;
+    current.next = prev;
+    prev = current;
+    current = next;
+  }
+
+  return prev; // new head
+}
+```
+
+Trace through a small example (`1 -> 2 -> 3`) by hand: at each step, `current.next` is redirected backward to `prev`, and all three pointers shift forward by one node, until `current` becomes `null` and `prev` holds the new head.
+
+## Detecting a Cycle: Floyd's Algorithm
+
+If a "linked list" accidentally (or intentionally, in some data corruption or interview scenario) has a node pointing back to an earlier node, naive traversal loops forever. Floyd's algorithm detects this using two pointers moving at different speeds:
+
+```javascript
+function hasCycle(head) {
+  let slow = head;
+  let fast = head;
+
+  while (fast && fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+    if (slow === fast) return true; // pointers met inside a cycle
+  }
+
+  return false; // fast reached the end, no cycle
+}
+```
+
+If there is a cycle, the faster pointer will eventually "lap" the slower one and they will point to the same node; if there is no cycle, the faster pointer simply reaches the end (`null`) first. This is commonly nicknamed the "tortoise and hare" algorithm, and it runs in O(n) time using only O(1) extra space.
+
+## Finding the Middle Node in One Pass
+
+The same two-speed pointer idea finds the middle node without first counting the list's length:
+
+```javascript
+function findMiddle(head) {
+  let slow = head;
+  let fast = head;
+
+  while (fast && fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+  }
+
+  return slow; // middle node (or the second of two middles for even-length lists)
+}
+```
+
+## Doubly Linked Lists
+
+A doubly linked list adds a `prev` reference to each node, enabling backward traversal at the cost of extra memory:
+
+```javascript
+class DoublyListNode {
+  constructor(value, next = null, prev = null) {
+    this.value = value;
+    this.next = next;
+    this.prev = prev;
+  }
+}
+```
+
+This structure underlies things like browser history (back/forward navigation) and many implementations of LRU caches, where you frequently need to remove a node from the middle of the list in O(1) time once you already have a reference to it.
+
+## Best Practices
+
+- Always handle the empty list (`head === null`) and single-node list cases explicitly — they are the most common source of edge-case bugs.
+- Draw the list out on paper (or a whiteboard) before writing pointer-manipulation code; linked list bugs are almost always about pointer order.
+- Use a "dummy head" node in operations like merging or removing elements to avoid special-casing the real head separately.
+- Keep a tail pointer if your list frequently appends, turning an O(n) append into O(1).
+
+## Common Mistakes to Avoid
+
+- Losing a reference to the rest of the list by reassigning `.next` before saving it in a temporary variable, especially during reversal.
+- Forgetting to update the head reference when the operation happens to affect the very first node.
+- Introducing an accidental cycle by pointing a node's `.next` back to an earlier node during a bug in list manipulation code.
+- Assuming a list has at least two nodes when writing traversal logic, causing crashes on empty or single-node lists.
+
+## Finding the Middle Node in One Pass
+
+A classic building block for many linked list problems — like checking if a list is a palindrome, or splitting a list in half — is finding the middle node without knowing the list's length ahead of time. The slow/fast pointer technique solves this in a single pass:
+
+```javascript
+function findMiddle(head) {
+  let slow = head;
+  let fast = head;
+
+  while (fast !== null && fast.next !== null) {
+    slow = slow.next;
+    fast = fast.next.next;
+  }
+
+  return slow; // slow is now at the middle (or the second middle, for even length)
+}
+```
+
+The insight is that `fast` moves twice as quickly as `slow`, so by the time `fast` reaches the end of the list, `slow` has covered exactly half the distance — arriving precisely at the middle without ever needing to count the list's total length first with a separate pass. This same slow/fast pointer setup, with a slightly different stopping condition, is also exactly how you detect a cycle in a linked list (Floyd's algorithm): if the list has a cycle, the fast pointer eventually laps the slow pointer and they meet at the same node; if the list has no cycle, the fast pointer simply reaches the end. Recognizing that "middle-finding" and "cycle detection" are really the same underlying two-pointer technique, applied with different exit conditions, is a good example of how a small number of core patterns cover a surprisingly large fraction of linked list problems.
+
+## Conclusion
+
+Linked lists reward careful pointer bookkeeping more than clever algorithms — most of the classic problems (reversal, cycle detection, merging) come down to tracking a small number of references correctly as you walk through the chain. Practice tracing through examples by hand, and the two-pointer techniques used throughout this guide will start to feel like natural tools rather than memorized tricks.

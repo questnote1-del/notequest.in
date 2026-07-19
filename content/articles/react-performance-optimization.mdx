@@ -1,0 +1,189 @@
+---
+title: "React Performance Optimization Techniques"
+description: "Practical techniques for optimizing React app performance, including memoization, code splitting, list virtualization, and how to profile renders correctly."
+category: react
+tags: ["react", "performance", "memoization", "rendering"]
+author: priya-sharma
+publishedAt: "2024-06-22"
+updatedAt: "2024-07-15"
+featured: false
+popular: true
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Should I wrap every component in React.memo?"
+    answer: "No. React.memo adds a comparison cost on every render, so wrapping cheap components can make things slightly slower. Reserve it for components that render often with the same props and are expensive enough that skipping the render is worth it."
+  - question: "Why did my component re-render even though I used React.memo?"
+    answer: "React.memo only helps if the props are referentially stable. Passing a new inline object, array, or function on every parent render defeats the memoization, since those props are never equal to the previous ones."
+  - question: "What is list virtualization?"
+    answer: "It means rendering only the visible rows of a long list (plus a small buffer) instead of every item in the data set, dramatically reducing the number of DOM nodes for lists with hundreds or thousands of entries."
+  - question: "How do I know if a performance optimization actually helped?"
+    answer: "Use the React Developer Tools Profiler or your browser's performance panel to measure render times before and after the change. Optimizing without measuring often adds complexity without any real improvement."
+references:
+  - title: "React Docs — Render and Commit"
+    url: "https://react.dev/learn/render-and-commit"
+  - title: "React Docs — memo"
+    url: "https://react.dev/reference/react/memo"
+  - title: "React Docs — Lazy loading with Suspense"
+    url: "https://react.dev/reference/react/lazy"
+---
+
+## Introduction
+
+React is fast by default for most applications, but as component trees grow and state updates become more frequent, unnecessary re-renders and expensive computations can add up. The good news is that React performance problems are almost always solvable with a small, well-understood toolbox: memoization, stable references, code splitting, and virtualization. This guide covers each one, along with how to verify that an optimization actually helped.
+
+## Understand Renders Before Optimizing
+
+A React component re-renders when its state changes, when its parent re-renders, or when the context it consumes changes. Re-rendering is not inherently expensive — React's virtual DOM diffing is fast — the real cost usually comes from expensive calculations inside the render, or from re-rendering huge subtrees unnecessarily.
+
+Before optimizing anything, profile. React Developer Tools includes a Profiler tab that records which components rendered, how long each render took, and why. Guessing at performance problems wastes effort on the wrong fix.
+
+## Memoizing Components with React.memo
+
+`React.memo` skips re-rendering a component if its props have not changed since the last render:
+
+```javascript
+const ProductCard = React.memo(function ProductCard({ product }) {
+  console.log("Rendering", product.name);
+  return <div>{product.name} — ${product.price}</div>;
+});
+```
+
+This only helps if `product` is a stable reference between renders. If the parent creates a new object literal on every render, `React.memo` cannot detect that "nothing really changed," and the optimization does nothing.
+
+## Memoizing Values with useMemo
+
+```javascript
+function ProductList({ products, query }) {
+  const filtered = useMemo(() => {
+    console.log("Filtering...");
+    return products.filter((p) => p.name.toLowerCase().includes(query));
+  }, [products, query]);
+
+  return filtered.map((p) => <ProductCard key={p.id} product={p} />);
+}
+```
+
+`useMemo` recomputes `filtered` only when `products` or `query` change, which matters both for avoiding repeated expensive work and for keeping the resulting array reference stable for child components wrapped in `React.memo`.
+
+## Memoizing Functions with useCallback
+
+Passing a new function on every render also breaks memoized children, since a new function reference is never equal to the previous one:
+
+```javascript
+function ProductList({ products }) {
+  const handleAddToCart = useCallback((id) => {
+    console.log("Add to cart:", id);
+  }, []);
+
+  return products.map((p) => (
+    <ProductCard key={p.id} product={p} onAdd={handleAddToCart} />
+  ));
+}
+```
+
+## Code Splitting with lazy and Suspense
+
+Large bundles slow down the initial load, regardless of how well individual components render. Splitting code so routes or heavy components load only when needed reduces the amount of JavaScript the browser must parse up front:
+
+```javascript
+import { lazy, Suspense } from "react";
+
+const AnalyticsDashboard = lazy(() => import("./AnalyticsDashboard"));
+
+function App() {
+  return (
+    <Suspense fallback={<p>Loading dashboard...</p>}>
+      <AnalyticsDashboard />
+    </Suspense>
+  );
+}
+```
+
+## Virtualizing Long Lists
+
+Rendering a list of 10,000 rows creates 10,000 DOM nodes, most of which are off-screen and invisible. Virtualization libraries (such as `react-window` or `react-virtualized`) render only the rows currently in the viewport, plus a small buffer:
+
+```javascript
+import { FixedSizeList as List } from "react-window";
+
+function BigList({ items }) {
+  return (
+    <List height={400} itemCount={items.length} itemSize={35} width="100%">
+      {({ index, style }) => <div style={style}>{items[index].label}</div>}
+    </List>
+  );
+}
+```
+
+This alone often fixes janky scrolling in data tables and long feeds far more effectively than any amount of memoization.
+
+## Keying Lists Correctly
+
+Using array indexes as React keys for lists that can reorder, insert, or remove items causes React to misattribute state between items, leading to subtle bugs and unnecessary DOM churn:
+
+```javascript
+// Risky when the list can reorder
+{items.map((item, index) => <Row key={index} item={item} />)}
+
+// Correct: use a stable, unique identifier
+{items.map((item) => <Row key={item.id} item={item} />)}
+```
+
+## Best Practices
+
+- Profile first with React Developer Tools before adding any memoization.
+- Keep props referentially stable (via `useMemo`/`useCallback`) before wrapping components in `React.memo`.
+- Split large bundles by route, and lazy-load heavy, rarely used components.
+- Virtualize any list that can grow beyond a few hundred rows.
+- Push state as far down the tree as possible so large parent components do not re-render for state only a small child cares about.
+
+## Common Mistakes to Avoid
+
+- Wrapping every component in `React.memo` without checking whether its props are actually stable, adding overhead with no benefit.
+- Using array indexes as keys for dynamic lists, which breaks state association when items are reordered or removed.
+- Optimizing render performance while ignoring bundle size, which is often the bigger contributor to a slow initial load.
+- Adding `useMemo`/`useCallback` for trivial calculations, where the memoization overhead can outweigh the savings.
+
+## Reading a Profiler Flame Graph
+
+The React DevTools Profiler records a "flame graph" for each render, showing every component that rendered and how long each one took. Learning to read it turns performance work from guesswork into a targeted process:
+
+```text
+Commit at 14:32:05 - total render time: 42ms
+  App                     0.4ms
+  └─ Dashboard            1.1ms
+     ├─ Sidebar           0.3ms  (did not re-render, grayed out)
+     └─ AnalyticsPanel    39.8ms  <- clearly the bottleneck
+        └─ ChartRenderer  38.2ms
+```
+
+In this example, almost the entire 42ms commit is spent inside `ChartRenderer`, not spread evenly across the tree. That immediately tells you where to focus: memoizing `Sidebar` further would save essentially nothing, while investigating why `ChartRenderer` is so expensive — perhaps it recalculates a large dataset transformation on every render, or renders far more SVG elements than are actually visible — would have real impact. The Profiler also shows *why* each component rendered (props changed, state changed, or a parent re-rendered), which is often more useful than the timing alone, since it can reveal that a component is re-rendering for a reason that has nothing to do with its own state at all.
+
+## Virtualizing Long Lists
+
+Rendering a list with thousands of DOM nodes is one of the most reliable ways to make a React app feel sluggish, regardless of how well-memoized the individual items are. List virtualization solves this by only rendering the items currently visible in the viewport, plus a small buffer, and swapping their content as the user scrolls:
+
+```javascript
+import { FixedSizeList } from "react-window";
+
+function BigList({ items }) {
+  const Row = ({ index, style }) => (
+    <div style={style}>{items[index].name}</div>
+  );
+
+  return (
+    <FixedSizeList height={400} itemCount={items.length} itemSize={35} width="100%">
+      {Row}
+    </FixedSizeList>
+  );
+}
+```
+
+Instead of mounting one DOM node per item — which for a list of 10,000 rows means 10,000 real elements the browser has to lay out and paint — a virtualized list typically keeps only a few dozen nodes mounted at any time, recycling them as the scroll position changes. This is a different category of fix than memoization: memoization avoids unnecessary re-renders of components that already exist, while virtualization avoids creating most of the components in the first place. For lists under a few hundred items, virtualization is usually unnecessary complexity; for lists that can grow into the thousands — search results, chat histories, data tables — it is often the single highest-impact performance change available.
+
+Code-splitting is a complementary technique that addresses a different kind of performance problem: how much JavaScript the browser has to download and parse before the app becomes interactive at all. Wrapping a rarely-used route or a heavy component in React's `lazy()` defers loading its code until it is actually needed, rather than including it in the initial bundle every visitor downloads regardless of whether they ever use that part of the app.
+
+## Conclusion
+
+React performance work is a game of removing unnecessary work: unnecessary re-renders, unnecessary DOM nodes, and unnecessary bytes shipped to the browser. Measure first, apply the smallest fix that addresses the actual bottleneck, and re-measure afterward. Most apps only need a handful of targeted optimizations rather than blanket memoization everywhere.

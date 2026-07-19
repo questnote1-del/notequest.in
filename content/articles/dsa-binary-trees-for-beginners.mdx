@@ -1,0 +1,234 @@
+---
+title: "Binary Trees for Beginners"
+description: "An introduction to binary trees covering traversal methods, binary search trees, common operations, and recursive patterns every beginner should understand."
+category: dsa
+tags: ["dsa", "binary-trees", "data-structures", "recursion"]
+author: neha-patel
+publishedAt: "2025-09-08"
+updatedAt: "2025-11-25"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the difference between a binary tree and a binary search tree?"
+    answer: "A binary tree simply means each node has at most two children, with no ordering requirement. A binary search tree additionally requires that every node's left subtree contains only smaller values and its right subtree only larger values."
+  - question: "What are the three main depth-first traversal orders?"
+    answer: "Preorder visits the node, then its left subtree, then its right subtree. Inorder visits the left subtree, then the node, then the right subtree. Postorder visits the left subtree, then the right subtree, then the node."
+  - question: "Why does an inorder traversal of a binary search tree return sorted values?"
+    answer: "Because a binary search tree keeps smaller values in the left subtree and larger values in the right subtree, visiting left, then the node, then right at every level naturally produces values in ascending order."
+  - question: "What causes a binary search tree to become unbalanced?"
+    answer: "Inserting values in a sorted or nearly sorted order causes each new node to attach only to one side, degenerating the tree into something resembling a linked list, which loses the logarithmic height that makes BST operations fast."
+references:
+  - title: "GeeksforGeeks — Binary Tree Data Structure"
+    url: "https://www.geeksforgeeks.org/dsa/binary-tree-data-structure/"
+  - title: "GeeksforGeeks — Tree Traversals"
+    url: "https://www.geeksforgeeks.org/dsa/tree-traversals-inorder-preorder-and-postorder/"
+  - title: "GeeksforGeeks — Binary Search Tree"
+    url: "https://www.geeksforgeeks.org/dsa/binary-search-tree-data-structure/"
+---
+
+## Introduction
+
+Binary trees show up constantly in coding interviews and in real systems — file system hierarchies, parsing expression trees, database indexes, and more. A binary tree is conceptually simple (each node has at most two children), but that simplicity supports a surprising range of algorithms once you understand traversal and recursion, the two core skills this guide focuses on.
+
+## Anatomy of a Binary Tree
+
+```javascript
+class TreeNode {
+  constructor(value, left = null, right = null) {
+    this.value = value;
+    this.left = left;
+    this.right = right;
+  }
+}
+
+const tree = new TreeNode(10,
+  new TreeNode(5, new TreeNode(3), new TreeNode(7)),
+  new TreeNode(15, null, new TreeNode(20))
+);
+```
+
+```text
+        10
+       /  \
+      5    15
+     / \     \
+    3   7    20
+```
+
+## Depth-First Traversals
+
+Depth-first traversal visits a tree by going as deep as possible down one path before backtracking, and it comes in three common flavors depending on when the current node is visited relative to its children:
+
+```javascript
+function preorder(node, result = []) {
+  if (!node) return result;
+  result.push(node.value);   // visit node first
+  preorder(node.left, result);
+  preorder(node.right, result);
+  return result;
+}
+
+function inorder(node, result = []) {
+  if (!node) return result;
+  inorder(node.left, result);
+  result.push(node.value);   // visit node in the middle
+  inorder(node.right, result);
+  return result;
+}
+
+function postorder(node, result = []) {
+  if (!node) return result;
+  postorder(node.left, result);
+  postorder(node.right, result);
+  result.push(node.value);   // visit node last
+  return result;
+}
+
+console.log(preorder(tree));  // [10, 5, 3, 7, 15, 20]
+console.log(inorder(tree));   // [3, 5, 7, 10, 15, 20]
+console.log(postorder(tree)); // [3, 7, 5, 20, 15, 10]
+```
+
+Each traversal has real, distinct uses: preorder is useful for copying a tree's structure, inorder produces sorted output specifically for binary search trees, and postorder is used when children must be fully processed before their parent — for example, safely deleting a tree bottom-up.
+
+## Breadth-First Traversal (Level Order)
+
+Breadth-first traversal visits nodes level by level, left to right, using a queue instead of recursion:
+
+```javascript
+function levelOrder(root) {
+  if (!root) return [];
+  const result = [];
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+    result.push(node.value);
+    if (node.left) queue.push(node.left);
+    if (node.right) queue.push(node.right);
+  }
+
+  return result;
+}
+
+console.log(levelOrder(tree)); // [10, 5, 15, 3, 7, 20]
+```
+
+## Binary Search Trees
+
+A binary search tree (BST) adds an ordering invariant: every node's left subtree contains only smaller values, and its right subtree contains only larger values. This invariant is what makes searching efficient:
+
+```javascript
+function insert(node, value) {
+  if (!node) return new TreeNode(value);
+  if (value < node.value) node.left = insert(node.left, value);
+  else if (value > node.value) node.right = insert(node.right, value);
+  return node;
+}
+
+function search(node, value) {
+  if (!node) return false;
+  if (node.value === value) return true;
+  return value < node.value ? search(node.left, value) : search(node.right, value);
+}
+```
+
+Because each comparison eliminates half of the remaining subtree (in a reasonably balanced tree), search, insert, and delete all run in O(log n) time on average — dramatically better than the O(n) a linked list or unsorted array would require.
+
+## When a BST Degenerates
+
+If you insert values in sorted order (`1, 2, 3, 4, 5`), every new node attaches only to the right, and the "tree" becomes indistinguishable from a linked list:
+
+```text
+1
+ \
+  2
+   \
+    3
+     \
+      4
+```
+
+Search now takes O(n) time instead of O(log n), which is exactly the problem self-balancing trees like AVL trees and red-black trees are designed to prevent, by rebalancing automatically after insertions and deletions.
+
+## Calculating Tree Height Recursively
+
+Many binary tree problems reduce to a simple recursive pattern: solve the problem for the left and right subtrees, then combine the results:
+
+```javascript
+function height(node) {
+  if (!node) return -1; // height of an empty tree
+  return 1 + Math.max(height(node.left), height(node.right));
+}
+```
+
+This "combine the results of the left and right subtrees" shape reappears in dozens of tree problems: counting nodes, checking if a tree is balanced, finding the diameter, and validating a BST.
+
+## Validating a Binary Search Tree
+
+A subtle but common interview trap: it is not enough to check that each node is greater than its immediate left child and less than its immediate right child — the ordering constraint must hold across the *entire* subtree, not just direct children.
+
+```javascript
+function isValidBST(node, min = -Infinity, max = Infinity) {
+  if (!node) return true;
+  if (node.value <= min || node.value >= max) return false;
+  return (
+    isValidBST(node.left, min, node.value) &&
+    isValidBST(node.right, node.value, max)
+  );
+}
+```
+
+Passing down a valid range (`min`, `max`) as you recurse, rather than only comparing to the immediate parent, is the key insight that avoids this trap.
+
+## Best Practices
+
+- Default to recursion for tree problems; the "solve for children, then combine" pattern maps naturally onto a tree's recursive structure.
+- Choose the traversal order intentionally based on what the problem actually needs, rather than defaulting to whichever one you remember best.
+- Watch for the BST validation trap — always check against a valid range, not just the immediate parent.
+- Consider the tree's shape (balanced vs degenerate) when reasoning about time complexity; "binary search tree" alone does not guarantee O(log n).
+
+## Common Mistakes to Avoid
+
+- Assuming every binary tree is a binary search tree, applying BST-only logic (like binary search) to a tree without the ordering invariant.
+- Comparing only to the immediate parent when validating BST ordering, missing violations further up the tree.
+- Forgetting the base case (`node === null`) in recursive tree functions, causing a crash instead of a clean return.
+- Mixing up preorder, inorder, and postorder when a problem specifically depends on visiting nodes in a particular order.
+
+## Level-Order Traversal with a Queue
+
+While in-order, pre-order, and post-order traversals are naturally recursive and process a tree depth-first, many problems — printing a tree level by level, finding the shortest path in an unweighted tree structure, or serializing a tree breadth-first — call for level-order traversal instead, using a queue rather than recursion:
+
+```javascript
+function levelOrder(root) {
+  if (!root) return [];
+  const result = [];
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const levelSize = queue.length;
+    const currentLevel = [];
+
+    for (let i = 0; i < levelSize; i++) {
+      const node = queue.shift();
+      currentLevel.push(node.val);
+      if (node.left) queue.push(node.left);
+      if (node.right) queue.push(node.right);
+    }
+
+    result.push(currentLevel);
+  }
+
+  return result;
+}
+```
+
+The key trick that separates a simple breadth-first traversal from a *level-by-level* traversal is capturing `queue.length` into `levelSize` before the inner loop starts — this snapshot tells you exactly how many nodes belong to the current level, so you can process precisely that many nodes (pushing their children onto the queue for the *next* level) before moving on. Without this snapshot, you would traverse the tree breadth-first correctly, but lose the ability to know where one level ends and the next begins. This pattern generalizes directly to graph breadth-first search, where the same queue-based level tracking is used to find shortest paths in unweighted graphs.
+
+Recognizing when a problem calls for breadth-first (level-order) versus depth-first (in-order, pre-order, post-order) traversal is itself a useful skill to practice deliberately. Problems phrased around "shortest," "minimum depth," or "level by level" almost always point toward breadth-first search, since it naturally explores the tree one full level at a time. Problems phrased around "path from root to leaf," "subtree properties," or "is this tree balanced/valid" tend to fit depth-first recursion more naturally, since they usually need information from an entire branch before a decision about that branch can be made.
+
+## Conclusion
+
+Binary trees reward pattern recognition: once "solve for the left and right subtrees recursively, then combine" becomes second nature, a huge range of tree problems — height, diameter, validation, serialization — start to look like variations on the same theme rather than unrelated puzzles.

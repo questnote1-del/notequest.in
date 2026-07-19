@@ -1,0 +1,151 @@
+---
+title: "Database Indexing Concepts"
+description: "Understand core database indexing concepts including clustered versus non-clustered indexes, index selectivity, and how indexes trade write speed for read sp..."
+category: dbms
+tags: ["dbms", "indexing", "database-design", "performance"]
+author: arjun-mehta
+publishedAt: "2026-03-22"
+updatedAt: "2026-04-26"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is index selectivity?"
+    answer: "Selectivity measures how effectively an index narrows down the rows that need to be examined; a highly selective index (like a unique email column) filters down to very few rows, while a low-selectivity index (like a boolean flag) filters out relatively little."
+  - question: "Can a table have more than one clustered index?"
+    answer: "No. A clustered index determines the actual physical order of rows on disk, so a table can have only one, though it can have many non-clustered indexes, each maintained as a separate structure pointing back to the table's rows."
+  - question: "Does adding more indexes always improve performance?"
+    answer: "No. Every index speeds up certain reads but adds overhead to every insert, update, and delete, since the index structure must be kept in sync with the table. Too many unused indexes can measurably slow down write-heavy workloads."
+  - question: "What is a composite index and why does column order matter?"
+    answer: "A composite index spans multiple columns, and it is most effective for queries that filter on its leftmost columns in the same order they were defined, since the index is physically sorted by those columns in that specific sequence."
+references:
+  - title: "PostgreSQL Docs — Indexes"
+    url: "https://www.postgresql.org/docs/current/indexes.html"
+  - title: "MySQL Docs — InnoDB and MyISAM Index Types"
+    url: "https://dev.mysql.com/doc/refman/8.4/en/index-btree-hash.html"
+  - title: "Use The Index, Luke — SQL Indexing Guide"
+    url: "https://use-the-index-luke.com/"
+---
+
+## Introduction
+
+An index is one of the most impactful tools a database offers for controlling query performance, but it is also one of the most misunderstood — treated either as a magic "make queries fast" switch, or ignored entirely until performance problems force the issue. This guide covers the conceptual foundations: how indexes are structured, the difference between clustered and non-clustered indexes, and the trade-offs that should guide when and what to index.
+
+## The Fundamental Trade-off
+
+Every index is a separate data structure that must be kept synchronized with the table it indexes. This buys faster reads for the columns it covers, at the cost of slower writes (since every insert, update, and delete must also update the index) and additional storage.
+
+```text
+No index:  fast writes, slow reads on that column (full table scan)
+Indexed:   slightly slower writes, fast reads on that column (index lookup)
+```
+
+There is no such thing as a "free" index — the decision to add one should always weigh how often a column is actually queried against how often the table is written to.
+
+## Clustered Indexes: Determining Physical Order
+
+A clustered index determines the actual physical order in which rows are stored on disk. Because rows can only be physically ordered one way, a table can have exactly one clustered index — often, but not always, built automatically on the primary key.
+
+```text
+Clustered index on id:
+Disk order: [id=1, ...] [id=2, ...] [id=3, ...] [id=4, ...]
+```
+
+Because the data itself is stored in this order, range queries on the clustered index's column (`WHERE id BETWEEN 100 AND 200`) can be extremely efficient, reading a contiguous block of the table directly.
+
+## Non-Clustered Indexes: Separate Lookup Structures
+
+A non-clustered index is a separate structure that stores the indexed column's values along with a pointer back to the actual row, without changing the table's physical storage order. A table can have many non-clustered indexes.
+
+```text
+Non-clustered index on email:
+"ada@example.com"  -> points to row at physical location X
+"alan@example.com" -> points to row at physical location Y
+```
+
+Looking up a row via a non-clustered index typically involves two steps: find the entry in the index, then follow its pointer to the actual row — slightly more work than a clustered index lookup, but still dramatically faster than scanning the whole table.
+
+## Index Selectivity
+
+Selectivity describes how well an index narrows down the search space. A column where nearly every value is unique (like an email address) is highly selective — an index on it filters a search down to just one or a handful of rows. A column with only a few distinct values (like a boolean `is_active` flag) is low selectivity — an index on it alone might still leave thousands of rows to check.
+
+```sql
+-- Highly selective: index narrows results dramatically
+CREATE INDEX idx_users_email ON users (email);
+
+-- Low selectivity on its own: many rows share the same value
+CREATE INDEX idx_users_active ON users (is_active);
+```
+
+Low-selectivity indexes are not necessarily useless — combined with other columns in a composite index, or used alongside additional filters, they can still help — but an index on a low-selectivity column used alone often provides little benefit over a full table scan, and some databases will even choose to ignore it in favor of a scan.
+
+## Composite Index Column Order
+
+As covered in more depth elsewhere, a composite index's usefulness depends heavily on column order, since the index is physically sorted by its columns in the exact sequence they were defined:
+
+```sql
+CREATE INDEX idx_orders_status_date ON orders (status, created_at);
+
+-- Uses the index efficiently: filters on the leftmost column, status
+SELECT * FROM orders WHERE status = 'pending';
+
+-- Also efficient: filters on both columns, in order
+SELECT * FROM orders WHERE status = 'pending' AND created_at > '2026-01-01';
+
+-- Cannot use this index efficiently: created_at isn't the leftmost column
+SELECT * FROM orders WHERE created_at > '2026-01-01';
+```
+
+A common rule of thumb: order composite index columns from the one most frequently used alone in filters, to the one least frequently used alone.
+
+## Unique Indexes
+
+A unique index both speeds up lookups and enforces that no two rows can share the same value in the indexed column(s):
+
+```sql
+CREATE UNIQUE INDEX idx_users_email_unique ON users (email);
+```
+
+This is commonly used for natural keys like email addresses or usernames, providing both a performance benefit and a data integrity guarantee in a single structure.
+
+## Verifying Index Usage
+
+```sql
+EXPLAIN SELECT * FROM users WHERE email = 'ada@example.com';
+```
+
+The query plan returned by `EXPLAIN` shows whether the database chose to use an available index or fall back to a full table scan — essential for confirming an index is actually paying for itself, rather than assuming based on its mere existence.
+
+## Best Practices
+
+- Add indexes based on actual query patterns (what you filter, join, and sort on), not speculatively on every column.
+- Understand that a table has exactly one clustered index but can have many non-clustered ones, and choose the clustered index's column deliberately (often the primary key).
+- Consider selectivity when deciding whether a column deserves its own index versus being folded into a composite index alongside a more selective column.
+- Periodically audit indexes for actual usage; unused indexes still cost write performance and storage with no offsetting read benefit.
+
+## Common Mistakes to Avoid
+
+- Indexing every column defensively, adding meaningful write overhead without a matching read benefit.
+- Assuming a low-selectivity column will never benefit from indexing, when it might still help significantly as part of a well-ordered composite index.
+- Forgetting that only one clustered index can exist per table, and not deliberately choosing which column should define physical row order.
+- Not verifying index usage with `EXPLAIN`, leading to false confidence that an index is helping when the database may not even be using it for a particular query.
+
+## Covering Indexes: Avoiding the Table Lookup Entirely
+
+A covering index is a composite index that happens to include every column a particular query needs — not just the columns in the `WHERE` clause, but also the columns in the `SELECT` list. When that's true, the database can answer the query directly from the index itself, without ever touching the underlying table:
+
+```sql
+CREATE INDEX idx_orders_customer_covering
+  ON orders (customer_id, order_date, total);
+
+-- This query can be satisfied entirely from the index above,
+-- since customer_id, order_date, and total are all present in it
+SELECT order_date, total FROM orders WHERE customer_id = 42;
+```
+
+Normally, a non-clustered index lookup finds matching rows' locations and then performs an additional "bookmark lookup" back into the actual table to retrieve columns not present in the index. A covering index skips that second step entirely, since everything the query needs — for both filtering and for the final result columns — already lives in the index's own leaf nodes. This can produce a significant speedup for read-heavy, frequently-run queries, at the cost of a larger index (since it now stores extra columns) and slightly more write overhead, since every insert or update to any of the included columns now has more index data to maintain. Covering indexes are a good example of a targeted optimization worth applying to specific hot queries identified through profiling, rather than a technique to reach for by default on every index in a schema.
+
+## Conclusion
+
+Indexes are a deliberate trade of write performance and storage for read performance, not a free performance upgrade. Understanding clustered versus non-clustered structures, selectivity, and composite column ordering turns indexing from a guessing game into a targeted decision, made in direct response to how your application actually queries its data.

@@ -1,0 +1,194 @@
+---
+title: "Arrays and Strings for Coding Interviews"
+description: "Master arrays and strings for coding interviews with core patterns like two pointers, sliding window, and prefix sums, explained with complexity analysis and..."
+category: dsa
+tags: ["dsa", "arrays", "strings", "interview-prep"]
+author: neha-patel
+publishedAt: "2025-08-03"
+updatedAt: "2025-10-06"
+featured: true
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Why do arrays and strings show up so often in coding interviews?"
+    answer: "They are simple, familiar data structures that still leave enormous room to test problem-solving technique, since so many classic patterns — two pointers, sliding window, prefix sums — are most naturally demonstrated on them."
+  - question: "What is the two-pointer technique?"
+    answer: "It uses two index variables that move through a data structure, often from opposite ends or at different speeds, to solve a problem in a single pass instead of using nested loops, typically reducing time complexity from O(n^2) to O(n)."
+  - question: "When should I use a sliding window instead of two pointers?"
+    answer: "Use a sliding window when you need to track a contiguous subarray or substring that satisfies some condition, expanding and shrinking a window's boundaries as you scan, which is a specialized form of the two-pointer idea."
+  - question: "What is a prefix sum and why is it useful?"
+    answer: "A prefix sum array stores the running total of elements up to each index, letting you compute the sum of any subarray in constant time after an initial O(n) pass, instead of recomputing the sum for every query."
+references:
+  - title: "MDN — Array reference"
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array"
+  - title: "GeeksforGeeks — Two Pointer Technique"
+    url: "https://www.geeksforgeeks.org/dsa/two-pointers-technique/"
+  - title: "GeeksforGeeks — Sliding Window Technique"
+    url: "https://www.geeksforgeeks.org/dsa/window-sliding-technique/"
+---
+
+## Introduction
+
+Arrays and strings are usually the very first data structures anyone learns, which is exactly why interviewers keep coming back to them — they are simple enough to explain in one sentence, yet deep enough to test whether you actually understand algorithmic technique. This guide covers the three patterns that unlock the majority of array and string interview problems: two pointers, sliding window, and prefix sums.
+
+## Why These Patterns Matter
+
+A huge fraction of "medium difficulty" array and string problems are really the same handful of techniques wearing different costumes. Recognizing which pattern applies is often more valuable than knowing any specific problem's solution by heart, because it lets you approach problems you have never seen before.
+
+## Two Pointers
+
+The two-pointer technique uses two index variables moving through a structure — often starting at opposite ends, or one ahead of the other — to avoid the nested loops a naive solution would require.
+
+**Example: Check if a sorted array has two numbers that sum to a target.**
+
+```javascript
+function hasPairWithSum(sortedArr, target) {
+  let left = 0;
+  let right = sortedArr.length - 1;
+
+  while (left < right) {
+    const sum = sortedArr[left] + sortedArr[right];
+    if (sum === target) return true;
+    if (sum < target) left++;
+    else right--;
+  }
+  return false;
+}
+
+console.log(hasPairWithSum([1, 3, 5, 8, 11], 14)); // true (3 + 11)
+```
+
+Because the array is sorted, moving `left` forward always increases the sum, and moving `right` backward always decreases it — this lets you eliminate possibilities in a single pass, achieving O(n) time instead of the O(n²) a brute-force nested loop would require.
+
+## Sliding Window
+
+A sliding window tracks a contiguous range of elements (a "window") that expands and shrinks as you scan through the array or string, maintaining some invariant about the elements currently inside it.
+
+**Example: Find the length of the longest substring without repeating characters.**
+
+```javascript
+function longestUniqueSubstring(s) {
+  const seen = new Set();
+  let left = 0;
+  let maxLength = 0;
+
+  for (let right = 0; right < s.length; right++) {
+    while (seen.has(s[right])) {
+      seen.delete(s[left]);
+      left++;
+    }
+    seen.add(s[right]);
+    maxLength = Math.max(maxLength, right - left + 1);
+  }
+
+  return maxLength;
+}
+
+console.log(longestUniqueSubstring("abcabcbb")); // 3 ("abc")
+```
+
+The `right` pointer always expands the window by one character; the `while` loop shrinks it from the `left` only when the invariant (no duplicate characters) is violated. This gives an O(n) solution, compared to checking every possible substring, which would be O(n²) or worse.
+
+## Prefix Sums
+
+A prefix sum array precomputes running totals, turning repeated "sum of a range" queries into constant-time lookups after a single O(n) setup pass.
+
+**Example: Answer many "sum between index i and j" queries efficiently.**
+
+```javascript
+function buildPrefixSums(arr) {
+  const prefix = [0];
+  for (let i = 0; i < arr.length; i++) {
+    prefix.push(prefix[i] + arr[i]);
+  }
+  return prefix;
+}
+
+function rangeSum(prefix, i, j) {
+  // sum of arr[i..j] inclusive
+  return prefix[j + 1] - prefix[i];
+}
+
+const arr = [2, 4, 6, 8, 10];
+const prefix = buildPrefixSums(arr); // [0, 2, 6, 12, 20, 30]
+console.log(rangeSum(prefix, 1, 3)); // 4 + 6 + 8 = 18
+```
+
+Without the prefix array, each range-sum query would take O(n) time in the worst case; with it, every query after the initial setup is O(1).
+
+## Common String-Specific Techniques
+
+Strings support all the array patterns above, plus a few string-specific tricks:
+
+```javascript
+// Reverse a string in place using two pointers
+function reverseString(chars) {
+  let left = 0, right = chars.length - 1;
+  while (left < right) {
+    [chars[left], chars[right]] = [chars[right], chars[left]];
+    left++;
+    right--;
+  }
+  return chars;
+}
+
+// Check for anagram using character frequency counting
+function isAnagram(a, b) {
+  if (a.length !== b.length) return false;
+  const counts = {};
+  for (const ch of a) counts[ch] = (counts[ch] || 0) + 1;
+  for (const ch of b) {
+    if (!counts[ch]) return false;
+    counts[ch]--;
+  }
+  return true;
+}
+```
+
+## Recognizing Which Pattern to Use
+
+- **Sorted array, looking for a pair or triplet with a target property** → two pointers.
+- **"Longest/shortest contiguous subarray or substring satisfying a condition"** → sliding window.
+- **Multiple range-sum (or range-average) queries on a fixed array** → prefix sums.
+- **Comparing character frequencies or anagrams** → hash map / frequency counting.
+
+## Best Practices
+
+- Always clarify whether the input is sorted before choosing a pattern — two pointers typically require sorted input to work correctly.
+- Trace through a small example by hand before coding, to make sure your window/pointer movement logic is correct at the boundaries.
+- State the time and space complexity of your solution out loud in an interview — it demonstrates you understand the trade-off, not just the syntax.
+- Consider edge cases explicitly: empty arrays, single-element arrays, and all-duplicate inputs.
+
+## Common Mistakes to Avoid
+
+- Using nested loops out of habit when a two-pointer or sliding window approach would reduce the time complexity significantly.
+- Forgetting to shrink the sliding window when its invariant is violated, causing incorrect results or an infinite loop.
+- Off-by-one errors in prefix sum indices — always double check whether your prefix array is 0-indexed or offset by one.
+- Mutating the input array in-place when the interviewer expects (or a later step requires) the original array to remain unchanged.
+
+## Recognizing Which Pattern a Problem Needs
+
+With three related patterns in hand, the harder skill is quickly recognizing which one a new problem is actually asking for. A useful heuristic: if the problem involves a sorted array (or can be sorted) and asks about pairs or triplets satisfying some condition, reach for two pointers starting from both ends:
+
+```javascript
+function twoSumSorted(nums, target) {
+  let left = 0;
+  let right = nums.length - 1;
+  while (left < right) {
+    const sum = nums[left] + nums[right];
+    if (sum === target) return [left, right];
+    if (sum < target) left++;
+    else right--;
+  }
+  return [-1, -1];
+}
+```
+
+If the problem asks about a "contiguous subarray" or "substring" satisfying some size or sum condition, that phrasing is almost always a signal for sliding window — contiguous is the key word, since sliding window fundamentally relies on being able to add and remove elements from one end of a moving range. If the problem asks about range sums queried repeatedly across the same static array, prefix sums are the tool, since they trade a single O(n) preprocessing pass for O(1) answers to any number of subsequent range queries. Practicing this classification step deliberately — before writing any code, ask "is this pairs-in-sorted-data, contiguous-subarray, or repeated-range-query?" — often matters more for interview performance than knowing any individual pattern's implementation by heart.
+
+It also helps to explicitly state the time and space complexity you are targeting before writing any code, since that constraint often rules out entire categories of naive approaches immediately. If an interviewer asks for an O(n) solution and your first instinct is a nested loop, that mismatch alone is a strong signal to reconsider whether one of these three patterns applies, rather than trying to optimize a fundamentally quadratic approach after the fact.
+
+## Conclusion
+
+Two pointers, sliding window, and prefix sums are not obscure tricks — they are the load-bearing patterns behind a huge share of array and string interview questions. Practicing these three specifically, until you can recognize which one a new problem calls for, will do more for your interview performance than memorizing dozens of individual solutions.

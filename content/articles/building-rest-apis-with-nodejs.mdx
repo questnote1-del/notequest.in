@@ -1,0 +1,240 @@
+---
+title: "Building REST APIs with Node.js"
+description: "A practical guide to building REST APIs with Node.js, covering routing, request parsing, status codes, validation, and structuring a maintainable backend pro..."
+category: nodejs
+tags: ["nodejs", "rest-api", "http", "backend"]
+author: arjun-mehta
+publishedAt: "2024-09-01"
+updatedAt: "2024-10-22"
+featured: true
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Do I need a framework like Express to build a REST API in Node.js?"
+    answer: "No, Node's built-in http module can serve a REST API on its own, but a framework like Express provides routing, middleware, and error handling conveniences that make larger APIs much easier to maintain."
+  - question: "What is the difference between PUT and PATCH?"
+    answer: "PUT is meant to replace an entire resource with the provided representation, while PATCH applies a partial update, changing only the fields included in the request body."
+  - question: "How should I structure error responses in a REST API?"
+    answer: "Use consistent JSON error objects with a clear message and an appropriate HTTP status code, and consider including a machine-readable error code so clients can handle specific cases programmatically instead of parsing message strings."
+  - question: "How do I validate incoming request bodies?"
+    answer: "Use a schema validation library such as Zod or Joi to validate and parse the request body before it reaches your business logic, returning a 400 status code with details when validation fails."
+references:
+  - title: "Node.js Docs — HTTP"
+    url: "https://nodejs.org/api/http.html"
+  - title: "MDN — HTTP response status codes"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
+  - title: "MDN — An overview of HTTP"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview"
+---
+
+## Introduction
+
+REST APIs are still the most common way backend services expose data to frontends, mobile apps, and other services, and Node.js is one of the most popular runtimes for building them. This guide covers the core building blocks — routing, request parsing, status codes, and validation — using plain Node.js concepts that apply whether you use a minimal framework or a heavier one.
+
+## What Makes an API "RESTful"
+
+REST (Representational State Transfer) organizes an API around resources, identified by URLs, manipulated through standard HTTP methods:
+
+```text
+GET    /users          -> list users
+GET    /users/42        -> get one user
+POST   /users          -> create a user
+PUT    /users/42        -> replace a user
+PATCH  /users/42        -> partially update a user
+DELETE /users/42        -> delete a user
+```
+
+Good REST APIs are also stateless — each request carries all the information the server needs, without relying on server-side session state between requests.
+
+## A Minimal API with Node's http Module
+
+```javascript
+import http from "http";
+
+const users = [{ id: 1, name: "Ada Lovelace" }];
+
+const server = http.createServer((req, res) => {
+  res.setHeader("Content-Type", "application/json");
+
+  if (req.method === "GET" && req.url === "/users") {
+    res.writeHead(200);
+    res.end(JSON.stringify(users));
+    return;
+  }
+
+  res.writeHead(404);
+  res.end(JSON.stringify({ error: "Not found" }));
+});
+
+server.listen(3000, () => console.log("Listening on port 3000"));
+```
+
+This works, but every route needs manual URL and method checks, which becomes unwieldy quickly — one reason most real projects reach for a routing layer, whether a minimal library or a full framework.
+
+## Parsing JSON Request Bodies
+
+Node does not parse request bodies automatically; you have to read the stream of data chunks yourself, or use a framework/middleware that does it for you:
+
+```javascript
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk) => (data += chunk));
+    req.on("end", () => {
+      try {
+        resolve(data ? JSON.parse(data) : {});
+      } catch (err) {
+        reject(err);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+```
+
+## Using Correct HTTP Status Codes
+
+Status codes communicate the outcome of a request precisely, which matters for clients that branch on them:
+
+```text
+200 OK             - successful GET/PUT/PATCH
+201 Created        - successful POST that created a resource
+204 No Content     - successful request with no response body (e.g. DELETE)
+400 Bad Request    - invalid input from the client
+401 Unauthorized   - missing or invalid authentication
+403 Forbidden      - authenticated but not allowed to perform this action
+404 Not Found      - resource does not exist
+409 Conflict       - request conflicts with current state (e.g. duplicate)
+500 Internal Server Error - unexpected server-side failure
+```
+
+Returning `200` for every response, including errors, forces clients to parse the body just to know whether something went wrong — a common and avoidable API design mistake.
+
+## Validating Input
+
+Never trust incoming data. Validate the shape and types of a request body before acting on it:
+
+```javascript
+import { z } from "zod";
+
+const createUserSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+function validateCreateUser(body) {
+  const result = createUserSchema.safeParse(body);
+  if (!result.success) {
+    return { valid: false, errors: result.error.flatten() };
+  }
+  return { valid: true, data: result.data };
+}
+```
+
+## Structuring a Larger API
+
+As an API grows, separating concerns keeps it maintainable:
+
+```text
+src/
+  routes/
+    users.routes.js     -- defines endpoints and calls controllers
+  controllers/
+    users.controller.js -- handles req/res, calls services
+  services/
+    users.service.js    -- business logic, talks to the database
+  models/
+    user.model.js        -- data shape / database schema
+```
+
+Keeping HTTP concerns (status codes, request parsing) in controllers, and business logic in services, makes it far easier to test the logic independently of the network layer.
+
+## Pagination for List Endpoints
+
+Returning an entire table in one response does not scale. Support pagination with query parameters:
+
+```javascript
+// GET /users?page=2&limit=20
+function getPagination(query) {
+  const page = Math.max(parseInt(query.page) || 1, 1);
+  const limit = Math.min(parseInt(query.limit) || 20, 100);
+  return { page, limit, offset: (page - 1) * limit };
+}
+```
+
+Capping `limit` prevents clients from requesting an unreasonably large page size that could strain the server.
+
+## Best Practices
+
+- Use plural nouns for resource URLs (`/users`, not `/getUsers`) and let HTTP methods express the action.
+- Return consistent, predictable JSON shapes for both success and error responses.
+- Validate all incoming data at the edge of your application, before it reaches business logic.
+- Version your API (`/api/v1/...`) from the start, so future breaking changes do not disrupt existing clients.
+- Log requests and errors with enough context (method, path, status, duration) to debug issues in production.
+
+## Common Mistakes to Avoid
+
+- Returning `200 OK` for error conditions, forcing clients to inspect the response body to detect failure.
+- Skipping input validation and trusting that clients will always send well-formed data.
+- Mixing business logic directly into route handlers, making the code hard to test and reuse.
+- Exposing internal error details (stack traces, database errors) directly in API responses, which can leak sensitive information.
+
+## Basic Rate Limiting and Security Headers
+
+A public-facing API also needs some baseline protection against abuse and common attack patterns. Rate limiting caps how many requests a single client can make in a given window, protecting the service from both accidental overload and deliberate abuse:
+
+```javascript
+const requestCounts = new Map();
+
+function rateLimiter(req, res, next) {
+  const key = req.ip;
+  const windowMs = 60_000;
+  const maxRequests = 100;
+  const now = Date.now();
+
+  const record = requestCounts.get(key) || { count: 0, windowStart: now };
+  if (now - record.windowStart > windowMs) {
+    record.count = 0;
+    record.windowStart = now;
+  }
+
+  record.count++;
+  requestCounts.set(key, record);
+
+  if (record.count > maxRequests) {
+    return res.status(429).json({ error: "Too many requests" });
+  }
+  next();
+}
+```
+
+This in-memory example resets per server process, which is fine for a single instance but needs a shared store like Redis once you run multiple instances behind a load balancer, so the limit applies consistently across all of them. Beyond rate limiting, setting sensible security headers (often handled by a middleware library like `helmet` in Express) and validating `Content-Type` on incoming requests round out a reasonable baseline for any public API, well before reaching for more advanced protections like API keys or OAuth scopes.
+
+## Versioning and Pagination
+
+Two practical concerns show up in almost every REST API that survives past its first few weeks: versioning and pagination. Versioning gives you a way to change your API's shape without breaking clients that depend on the old one, most commonly done via a URL prefix:
+
+```javascript
+app.use("/api/v1/users", usersV1Router);
+app.use("/api/v2/users", usersV2Router); // new shape, old clients unaffected
+```
+
+This lets you introduce breaking changes — renamed fields, different response structures — as a new version rather than a disruptive change to an existing endpoint, giving consumers time to migrate on their own schedule. Pagination matters as soon as a collection endpoint can return an unbounded number of records; returning all of them in one response eventually becomes slow for the server and wasteful for the client. A common approach is cursor-based pagination, which is more resilient to items being inserted or deleted mid-pagination than simple page-number-based pagination:
+
+```javascript
+app.get("/api/v1/posts", async (req, res) => {
+  const { cursor, limit = 20 } = req.query;
+  const posts = await Post.find(cursor ? { _id: { $gt: cursor } } : {})
+    .sort({ _id: 1 })
+    .limit(Number(limit));
+  const nextCursor = posts.length ? posts[posts.length - 1]._id : null;
+  res.json({ data: posts, nextCursor });
+});
+```
+
+Both concerns are easy to skip early on and expensive to retrofit later, so it is worth designing collection endpoints with pagination from the start, even if the initial dataset is small.
+
+## Conclusion
+
+A well-built REST API comes down to a handful of consistent decisions: predictable URLs, correct status codes, validated input, and a clean separation between HTTP handling and business logic. Whether you build directly on Node's `http` module or a framework on top of it, these fundamentals stay the same and will make your API easier to consume and maintain.

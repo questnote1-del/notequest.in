@@ -1,0 +1,214 @@
+---
+title: "CSS Grid Layout Explained"
+description: "Learn CSS Grid layout from the ground up, covering grid-template-columns, fr units, grid areas, and how Grid compares to Flexbox for two-dimensional layouts."
+category: css
+tags: ["css", "grid", "layout", "responsive-design"]
+author: priya-sharma
+publishedAt: "2025-04-19"
+updatedAt: "2025-05-11"
+featured: false
+popular: true
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the difference between CSS Grid and Flexbox?"
+    answer: "Grid is designed for two-dimensional layouts, controlling rows and columns simultaneously, while Flexbox is designed for one-dimensional layouts along a single row or column. Many real interfaces use both together for different parts of the page."
+  - question: "What does the fr unit mean in Grid?"
+    answer: "fr stands for a fraction of the remaining available space in the grid container. A track defined as 1fr takes an equal share of whatever space is left after fixed-size tracks are accounted for."
+  - question: "How do I make a responsive grid without media queries?"
+    answer: "Use grid-template-columns with repeat(auto-fit, minmax(250px, 1fr)), which automatically fits as many columns as will comfortably fit at a minimum width, wrapping items onto new rows as the viewport shrinks."
+  - question: "Can grid items overlap?"
+    answer: "Yes. By explicitly placing multiple items on overlapping grid lines or areas using grid-column and grid-row, you can create layered layouts, which is something Flexbox cannot do without additional positioning tricks."
+references:
+  - title: "MDN — CSS Grid Layout"
+    url: "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout"
+  - title: "MDN — Basic concepts of grid layout"
+    url: "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout/Basic_concepts_of_grid_layout"
+  - title: "CSS-Tricks — A Complete Guide to Grid"
+    url: "https://css-tricks.com/snippets/css/complete-guide-grid/"
+---
+
+## Introduction
+
+CSS Grid gives you direct control over rows and columns at the same time, something Flexbox was never designed to do. Where Flexbox arranges items along a single line that may wrap, Grid lets you define an actual two-dimensional grid and place items precisely within it. For page layouts, dashboards, and image galleries, Grid is often the more natural and less hacky tool.
+
+## Creating a Basic Grid
+
+```css
+.container {
+  display: grid;
+  grid-template-columns: 200px 200px 200px;
+  grid-template-rows: 100px 100px;
+  gap: 1rem;
+}
+```
+
+This defines a fixed 3-column, 2-row grid. Every direct child of `.container` is automatically placed into the next available cell, left to right, top to bottom, unless you explicitly place it elsewhere.
+
+## The fr Unit: Flexible Track Sizing
+
+Hard-coding pixel widths for every column is rarely what you want. The `fr` unit distributes available space proportionally:
+
+```css
+.container {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr; /* middle column is twice as wide */
+  gap: 1rem;
+}
+```
+
+You can mix fixed and flexible tracks freely — a very common sidebar layout looks like this:
+
+```css
+.layout {
+  display: grid;
+  grid-template-columns: 250px 1fr; /* fixed sidebar, flexible main content */
+  min-height: 100vh;
+}
+```
+
+## repeat() for Less Repetition
+
+```css
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* four equal columns */
+  gap: 1rem;
+}
+```
+
+## Responsive Grids Without Media Queries
+
+Combining `repeat()`, `auto-fit`, and `minmax()` creates a grid that automatically adjusts its column count based on available space:
+
+```css
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+```
+
+Each card takes a minimum of 250px and grows to fill any remaining space; as the viewport shrinks, columns wrap onto new rows automatically, all without a single `@media` rule.
+
+## Placing Items Explicitly
+
+Items can span multiple rows or columns using `grid-column` and `grid-row`:
+
+```css
+.featured {
+  grid-column: 1 / 3; /* spans from column line 1 to column line 3 (2 columns wide) */
+  grid-row: 1 / 3;     /* spans 2 rows */
+}
+```
+
+The shorthand `span` keyword avoids counting exact line numbers:
+
+```css
+.featured {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+```
+
+## Named Grid Areas
+
+For complex, application-style layouts, naming areas makes the CSS read almost like a diagram of the page:
+
+```css
+.layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "sidebar header"
+    "sidebar main"
+    "sidebar footer";
+  min-height: 100vh;
+}
+
+.header  { grid-area: header; }
+.sidebar { grid-area: sidebar; }
+.main    { grid-area: main; }
+.footer  { grid-area: footer; }
+```
+
+```html
+<div class="layout">
+  <div class="sidebar">Sidebar</div>
+  <div class="header">Header</div>
+  <div class="main">Main content</div>
+  <div class="footer">Footer</div>
+</div>
+```
+
+## Aligning Items and the Grid Itself
+
+Grid supports the same `justify-*`/`align-*` family of properties as Flexbox, applied to both the grid container's tracks and individual items:
+
+```css
+.container {
+  display: grid;
+  justify-content: center; /* aligns the whole grid horizontally within the container */
+  align-items: center;     /* aligns each item within its own cell, vertically */
+}
+```
+
+## Grid vs Flexbox: Choosing the Right Tool
+
+- Use **Flexbox** for a single row or column of items — a navbar, a button group, a list of tags.
+- Use **Grid** when you need to control rows and columns together — a page layout, a photo gallery, a dashboard with cards of varying sizes.
+- It is common, and often ideal, to use Grid for the overall page structure and Flexbox for aligning content inside individual grid areas.
+
+```css
+.page {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+}
+.card-header {
+  display: flex; /* Flexbox handles alignment inside this smaller component */
+  justify-content: space-between;
+  align-items: center;
+}
+```
+
+## Best Practices
+
+- Use named grid areas for complex layouts — they make the CSS far easier to read than a wall of line numbers.
+- Reach for `repeat(auto-fit, minmax(...))` before writing manual breakpoints for simple responsive grids.
+- Combine Grid for overall page structure with Flexbox for aligning content within individual cells.
+- Use `gap` for spacing between grid tracks instead of margins on individual items.
+- Keep grid definitions in one place (the container) rather than scattering placement rules across many unrelated selectors.
+
+## Common Mistakes to Avoid
+
+- Reaching for Grid when a simple Flexbox row would be simpler and sufficient.
+- Manually counting grid lines for placement instead of using named areas or the `span` keyword.
+- Forgetting that `fr` distributes *remaining* space after fixed-size tracks are subtracted, which can produce unexpected results when mixing units carelessly.
+- Not testing how a grid with `auto-fit` behaves at very narrow or very wide viewport widths before shipping it.
+
+## Auto-Placement with minmax and auto-fit
+
+One of Grid's most practically useful patterns builds a fully responsive card layout without a single media query, by combining `repeat()`, `auto-fit`, and `minmax()`:
+
+```css
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+```
+
+This one-line declaration tells the browser: fit as many columns as possible, but never let a column shrink below 220px, and stretch the last row of columns to evenly fill any remaining space. As the viewport narrows, columns automatically drop from four to three to two to one, with no breakpoints defined anywhere — the browser recalculates the column count on every resize based purely on available space and the minimum width you specified. This single pattern replaces what used to require several explicit media queries, each redefining `grid-template-columns` at different breakpoints, and it degrades far more gracefully at viewport widths that fall between traditional breakpoints, since the layout responds continuously rather than jumping between a small number of fixed states.
+
+The difference between `auto-fit` and its close relative `auto-fill` is subtle but worth knowing: `auto-fit` collapses empty tracks down to zero width and stretches existing items to fill the leftover space, while `auto-fill` keeps empty tracks at their minimum width, effectively reserving room for items that might be added later. For a card grid where you want existing cards to grow and fill the row when there simply aren't enough of them to fill every column, `auto-fit` is almost always the one you want.
+
+Grid also supports explicit item placement through `grid-column` and `grid-row`, letting a specific item span multiple tracks regardless of where it falls in source order — useful for a featured item in a card grid that should visually take up twice the width of its neighbors: `grid-column: span 2` tells that one item to occupy two columns instead of the usual one, without needing to restructure the surrounding markup at all.
+
+Browser developer tools now include dedicated Grid inspection overlays that visualize track boundaries, gap sizes, and named areas directly on the rendered page, which makes debugging a misbehaving grid dramatically easier than it was in Grid's early days, when the only way to understand a layout mismatch was carefully re-reading the CSS line by line.
+
+Grid and Flexbox are not mutually exclusive choices for a single project — most real interfaces use both, with Grid handling the page-level or section-level two-dimensional layout, and Flexbox handling one-dimensional arrangements nested inside individual grid items, like aligning icons and text within a single card.
+
+## Conclusion
+
+CSS Grid fills a gap Flexbox was never meant to fill: true two-dimensional layout control. Once you are comfortable with tracks, the `fr` unit, and named areas, page-level layouts that used to require fragile float or table hacks become a handful of declarative, readable CSS rules.

@@ -1,0 +1,225 @@
+---
+title: "GitHub Actions CI/CD Basics"
+description: "Learn the basics of GitHub Actions for CI/CD, including workflow syntax, jobs, steps, triggers, and building a simple pipeline that tests and deploys code au..."
+category: github
+tags: ["github", "github-actions", "ci-cd", "automation"]
+author: notequest-team
+publishedAt: "2025-07-17"
+updatedAt: "2025-09-12"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is a GitHub Actions workflow?"
+    answer: "A workflow is an automated process defined in a YAML file inside the .github/workflows directory of a repository, triggered by events like pushes or pull requests, made up of one or more jobs that run a sequence of steps."
+  - question: "What is the difference between a job and a step?"
+    answer: "A job is a set of steps that run on the same runner, and by default different jobs in a workflow run in parallel. A step is a single task within a job, such as running a command or using a pre-built action."
+  - question: "What are GitHub Actions 'secrets' used for?"
+    answer: "Secrets store sensitive values, like API keys or deployment credentials, encrypted in the repository or organization settings, and they can be referenced in workflows without exposing the actual value in the workflow file or logs."
+  - question: "Can I reuse the same workflow logic across multiple repositories?"
+    answer: "Yes, through reusable workflows and composite actions, which let you define a workflow or a sequence of steps once and call it from multiple repositories, avoiding duplicated CI/CD configuration."
+references:
+  - title: "GitHub Docs — Understanding GitHub Actions"
+    url: "https://docs.github.com/en/actions/about-github-actions/understanding-github-actions"
+  - title: "GitHub Docs — Workflow syntax for GitHub Actions"
+    url: "https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions"
+  - title: "GitHub Docs — Events that trigger workflows"
+    url: "https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows"
+---
+
+## Introduction
+
+GitHub Actions turns your repository into a place where automation lives alongside your code — running tests on every pull request, deploying on every merge to `main`, or running a scheduled job every night. This guide covers the core building blocks: workflows, triggers, jobs, and steps, and walks through a simple but realistic CI/CD pipeline.
+
+## Where Workflows Live
+
+Every workflow is a YAML file inside `.github/workflows/` at the root of your repository:
+
+```text
+.github/
+  workflows/
+    ci.yml
+    deploy.yml
+```
+
+GitHub automatically detects and runs any workflow file in that directory based on the triggers you define inside it.
+
+## Anatomy of a Workflow
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm test
+```
+
+Breaking this down:
+
+- **`on`** defines the triggers — here, every push to `main` and every pull request targeting `main`.
+- **`jobs`** contains one or more named jobs (`test` here), each running on a fresh virtual machine (`runs-on`).
+- **`steps`** run in order within a job — either a reusable `action` (`uses`) or a shell command (`run`).
+
+## Common Triggers
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:        # allows manually triggering the workflow
+  schedule:
+    - cron: "0 3 * * *"     # runs every day at 3 AM UTC
+```
+
+`workflow_dispatch` is especially useful during development, letting you trigger a workflow manually from the GitHub UI without needing a real push or pull request event.
+
+## Running Jobs in Parallel and in Sequence
+
+By default, multiple jobs in the same workflow run in parallel. Use `needs` to make one job depend on another:
+
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm test
+
+  deploy:
+    needs: [lint, test]  # only runs if both lint and test succeed
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploying..."
+```
+
+## Using Secrets
+
+Sensitive values like API tokens should never be hardcoded in a workflow file. Instead, store them as encrypted secrets in the repository settings and reference them via `${{ secrets.NAME }}`:
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./deploy.sh
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+GitHub automatically masks secret values in workflow logs, so they never appear in plain text even if a step accidentally prints them.
+
+## A Realistic CI/CD Pipeline
+
+Combining everything into one practical example — lint and test on every pull request, deploy only on merges to `main`:
+
+```yaml
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Deploying to production..."
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+The `if` condition on the `deploy` job ensures deployment only happens for actual pushes to `main`, not for pull requests, even though both trigger the same workflow.
+
+## Caching Dependencies for Faster Runs
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: "20"
+    cache: "npm"
+```
+
+Caching installed dependencies between runs can meaningfully cut down workflow duration, especially for larger projects with many dependencies.
+
+## Best Practices
+
+- Keep workflows focused: separate CI (lint/test/build) from deployment logic when they have different triggers or requirements.
+- Pin third-party actions to a specific major version (`@v4`) rather than `@main`, to avoid unexpected breaking changes.
+- Store all credentials as encrypted secrets, never directly in workflow YAML.
+- Use `needs` to express real dependencies between jobs, and let independent jobs run in parallel to save time.
+- Add caching for dependency installation steps to speed up frequently run workflows.
+
+## Common Mistakes to Avoid
+
+- Hardcoding secrets or tokens directly in a workflow file, where they become visible to anyone with read access to the repository.
+- Deploying on every trigger without an `if` condition, accidentally deploying from pull requests or non-main branches.
+- Not pinning action versions, leaving workflows vulnerable to breaking changes introduced upstream.
+- Writing one enormous job with dozens of steps instead of splitting logically independent work into separate, parallelizable jobs.
+
+## Caching Dependencies for Faster Runs
+
+Installing dependencies from scratch on every single workflow run adds up quickly — a Node.js project's `npm install` alone can take a meaningful chunk of total CI time when repeated dozens of times a day across a team. GitHub Actions' caching action lets you persist `node_modules` (or the package manager's cache directory) between runs, keyed by your lockfile's contents:
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: 20
+    cache: "npm"
+
+- run: npm ci
+```
+
+The built-in `cache: "npm"` option on `setup-node` handles this automatically, restoring a previous cache of npm's download cache when the lockfile hash matches a prior run, and saving a fresh one when dependencies change. For more customized caching needs, the standalone `actions/cache` action lets you cache arbitrary directories — build output, compiled assets, Docker layers — keyed however makes sense for your project. The main trade-off to keep in mind is cache invalidation: a cache key tied to your lockfile hash ensures you never get stale dependencies, but overly broad cache keys (or none at all) can cause a workflow to silently use outdated cached artifacts, so it is worth being deliberate about exactly what changes should invalidate a given cache.
+
+Beyond dependency installs, matrix builds are another common way workflows get slow if left unmanaged — running the same test suite across several Node versions or operating systems multiplies total run time by the number of matrix combinations. Scoping expensive matrix jobs to only the branches or events where they are truly needed (for example, running the full matrix only on the main branch, and a single fast configuration on every pull request) keeps everyday feedback quick without sacrificing broader compatibility coverage before a release.
+
+Secrets management deserves equal attention: never hardcode API keys, deployment credentials, or tokens directly in a workflow file, since that file is plain text and typically committed to the repository. GitHub's built-in encrypted secrets, referenced as `${{ secrets.MY_SECRET }}` inside a workflow, keep sensitive values out of version control entirely while still making them available to the steps that need them at runtime.
+
+Workflows can also be triggered by more than just pushes and pull requests — the `workflow_dispatch` trigger adds a manual "Run workflow" button in the GitHub UI, useful for deployments you want to trigger deliberately rather than automatically on every merge, and `schedule` triggers let a workflow run on a cron-like timer, which is a common way to run nightly test suites or periodic maintenance tasks without any code push actually happening.
+
+Keeping an eye on total workflow run time and billed minutes matters too, especially for private repositories where Actions usage consumes a monthly quota. Splitting independent checks (linting, unit tests, type checking) into separate parallel jobs rather than one long sequential job often reduces wall-clock time noticeably, since GitHub runs independent jobs concurrently across separate runners by default.
+
+## Conclusion
+
+GitHub Actions turns testing and deployment from manual, easily forgotten steps into automatic, consistent parts of your development process. Starting with a simple lint-and-test workflow on pull requests, then layering in deployment gated by branch and event conditions, covers the vast majority of what small and medium-sized projects need from CI/CD.

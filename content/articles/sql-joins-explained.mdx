@@ -1,0 +1,201 @@
+---
+title: "SQL Joins Explained"
+description: "A clear explanation of SQL joins including INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL OUTER JOIN, with example tables and queries showing exactly what each..."
+category: sql
+tags: ["sql", "joins", "database", "relational-databases"]
+author: arjun-mehta
+publishedAt: "2025-01-03"
+updatedAt: "2025-02-12"
+featured: false
+popular: true
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the default type of JOIN in SQL?"
+    answer: "Writing just JOIN without a qualifier is equivalent to INNER JOIN, which returns only the rows that have matching values in both tables being joined."
+  - question: "When should I use a LEFT JOIN instead of an INNER JOIN?"
+    answer: "Use a LEFT JOIN when you need every row from the left table regardless of whether it has a match in the right table, such as listing all customers including those who have never placed an order."
+  - question: "What does a self join do?"
+    answer: "A self join joins a table to itself, typically used to compare rows within the same table, such as finding employees who share the same manager by joining the employees table to itself on the manager id."
+  - question: "Is FULL OUTER JOIN supported in every database?"
+    answer: "No. MySQL does not support FULL OUTER JOIN directly; it is commonly emulated there with a UNION of a LEFT JOIN and a RIGHT JOIN, while PostgreSQL and SQL Server support it natively."
+references:
+  - title: "MDN — SQL glossary: JOIN"
+    url: "https://developer.mozilla.org/en-US/docs/Glossary/JOIN"
+  - title: "PostgreSQL Docs — Joins Between Tables"
+    url: "https://www.postgresql.org/docs/current/tutorial-join.html"
+  - title: "PostgreSQL Docs — SELECT"
+    url: "https://www.postgresql.org/docs/current/sql-select.html"
+---
+
+## Introduction
+
+Relational databases split data into separate tables to avoid duplication — customers in one table, orders in another — and joins are how you recombine that data for a query. If you have ever been confused about the difference between an INNER JOIN and a LEFT JOIN, this guide walks through each join type with concrete example tables so you can see exactly which rows each one returns.
+
+## Example Tables
+
+Throughout this guide, assume two simple tables:
+
+```sql
+-- customers
+id | name
+1  | Ada
+2  | Alan
+3  | Grace
+
+-- orders
+id | customer_id | amount
+1  | 1           | 50
+2  | 1           | 20
+3  | 2           | 75
+```
+
+Notice that Grace (customer id 3) has no matching rows in `orders`, and every order references a valid customer.
+
+## INNER JOIN: Only Matching Rows
+
+An `INNER JOIN` returns only the rows where the join condition finds a match in both tables:
+
+```sql
+SELECT customers.name, orders.amount
+FROM customers
+INNER JOIN orders ON customers.id = orders.customer_id;
+
+-- Result:
+-- name | amount
+-- Ada  | 50
+-- Ada  | 20
+-- Alan | 75
+```
+
+Grace does not appear at all, because she has no matching row in `orders`. Writing plain `JOIN` without a qualifier defaults to `INNER JOIN`.
+
+## LEFT JOIN: Every Row from the Left Table
+
+A `LEFT JOIN` (or `LEFT OUTER JOIN`) keeps every row from the left table, filling in `NULL` for columns from the right table when there is no match:
+
+```sql
+SELECT customers.name, orders.amount
+FROM customers
+LEFT JOIN orders ON customers.id = orders.customer_id;
+
+-- Result:
+-- name  | amount
+-- Ada   | 50
+-- Ada   | 20
+-- Alan  | 75
+-- Grace | NULL
+```
+
+This is the join to reach for whenever you need "all of X, along with any related Y" — for example, all customers along with their orders, including customers who have never ordered anything.
+
+## RIGHT JOIN: Every Row from the Right Table
+
+`RIGHT JOIN` is the mirror image of `LEFT JOIN` — it keeps every row from the right table instead:
+
+```sql
+SELECT customers.name, orders.amount
+FROM customers
+RIGHT JOIN orders ON customers.id = orders.customer_id;
+```
+
+In this particular example, the result looks identical to the `INNER JOIN` because every order does have a matching customer. `RIGHT JOIN` is used far less often in practice than `LEFT JOIN`, since most developers write the query with the "keep everything from this table" table listed first and use `LEFT JOIN` instead.
+
+## FULL OUTER JOIN: Everything from Both Sides
+
+A `FULL OUTER JOIN` returns every row from both tables, matching where possible and filling in `NULL` on whichever side lacks a match:
+
+```sql
+SELECT customers.name, orders.amount
+FROM customers
+FULL OUTER JOIN orders ON customers.id = orders.customer_id;
+
+-- Result:
+-- name  | amount
+-- Ada   | 50
+-- Ada   | 20
+-- Alan  | 75
+-- Grace | NULL
+```
+
+If both tables had unmatched rows on each side, you would see `NULL` values in both directions. MySQL does not support this syntax directly — it is typically emulated with `UNION` of a `LEFT JOIN` and a `RIGHT JOIN`.
+
+## Filtering "No Match" Rows
+
+A very common real-world pattern uses a `LEFT JOIN` combined with a `WHERE` clause to find rows that have *no* match at all — for example, customers with zero orders:
+
+```sql
+SELECT customers.name
+FROM customers
+LEFT JOIN orders ON customers.id = orders.customer_id
+WHERE orders.id IS NULL;
+
+-- Result: Grace
+```
+
+## Joining More Than Two Tables
+
+Joins can be chained to pull data from several related tables in a single query:
+
+```sql
+SELECT customers.name, orders.amount, products.title
+FROM customers
+JOIN orders ON customers.id = orders.customer_id
+JOIN order_items ON orders.id = order_items.order_id
+JOIN products ON order_items.product_id = products.id;
+```
+
+## Self Joins
+
+A self join relates a table to itself, useful for hierarchical data like an employee-manager relationship:
+
+```sql
+SELECT e.name AS employee, m.name AS manager
+FROM employees e
+JOIN employees m ON e.manager_id = m.id;
+```
+
+## Best Practices
+
+- Always specify the join type explicitly (`INNER JOIN`, `LEFT JOIN`) rather than relying on ambiguous, older comma-based join syntax.
+- Index the columns used in join conditions — typically foreign key columns — since unindexed joins can force expensive full table scans.
+- Be careful with `WHERE` conditions on the "outer" side of a `LEFT JOIN`; filtering there in the wrong place can accidentally turn it back into an `INNER JOIN`.
+- Alias table names in multi-join queries to keep the SQL readable.
+- Select only the columns you need rather than `SELECT *`, especially across multiple joined tables.
+
+## Common Mistakes to Avoid
+
+- Using `INNER JOIN` when you actually need every row from one side, silently dropping rows without matches.
+- Placing a filter on the right-hand table's column directly in the `WHERE` clause of a `LEFT JOIN`, which unintentionally excludes the `NULL` rows you meant to keep.
+- Forgetting the join condition entirely, producing a cartesian product where every row from one table is paired with every row from the other.
+- Assuming `RIGHT JOIN` and `LEFT JOIN` with tables swapped always produce identical results — the column order and which side's unmatched rows are kept can differ if the query has additional clauses.
+
+## CROSS JOIN: Every Combination of Rows
+
+A `CROSS JOIN` produces every possible combination of rows from two tables — a Cartesian product — with no join condition at all. It is rarely what you want by accident, but it has legitimate, deliberate uses:
+
+```sql
+SELECT sizes.label, colors.label
+FROM sizes
+CROSS JOIN colors;
+
+-- If sizes has 3 rows and colors has 4 rows, this returns 12 rows:
+-- every size paired with every color
+```
+
+A common real use case is generating every possible combination of product variants (size × color) before a store has actually created inventory records for each one, or building a complete calendar grid by cross-joining a list of dates with a list of categories to ensure every combination appears in a report, even ones with zero actual activity. Outside of these deliberate cases, a `CROSS JOIN` appearing by accident — usually from forgetting a join condition entirely — is one of the most common causes of a query that suddenly returns far more rows than expected, since the result size is the product of both tables' row counts rather than a filtered subset of either.
+
+A related pattern worth knowing is the self-join, where a table is joined to itself — typically to compare rows within the same table, such as finding all employees who earn more than their own manager, where both the employee and the manager live in the same `employees` table:
+
+```sql
+SELECT e.name AS employee, m.name AS manager
+FROM employees e
+JOIN employees m ON e.manager_id = m.id
+WHERE e.salary > m.salary;
+```
+
+The key to a self-join is aliasing the same table twice with two different names (`e` and `m` above) so the query can refer to "this row" and "the related row" separately, even though both come from the identical underlying table.
+
+## Conclusion
+
+Every SQL join answers the same underlying question — "what should happen to rows that don't have a match?" — just with a different answer. INNER JOIN discards them, LEFT/RIGHT JOIN keeps one side's unmatched rows, and FULL OUTER JOIN keeps both. Once you can picture your two example tables and trace through what each join type returns, choosing the right one for any real query becomes straightforward.

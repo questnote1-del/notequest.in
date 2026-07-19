@@ -1,0 +1,192 @@
+---
+title: "Hash Tables Explained"
+description: "Understand how hash tables achieve near-constant time lookups, how hash functions and collision handling work, and common interview patterns that rely on them."
+category: dsa
+tags: ["dsa", "hash-tables", "data-structures", "complexity-analysis"]
+author: neha-patel
+publishedAt: "2025-10-13"
+updatedAt: "2025-11-14"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Why are hash table lookups considered O(1) on average?"
+    answer: "A good hash function distributes keys roughly evenly across the underlying buckets, so on average each bucket holds very few entries, letting lookup, insertion, and deletion complete in roughly constant time regardless of how many entries the table holds."
+  - question: "What is a hash collision?"
+    answer: "A collision occurs when two different keys hash to the same bucket index. Every hash table implementation needs a strategy, such as chaining or open addressing, to store and retrieve multiple entries that land in the same bucket."
+  - question: "What is the difference between a JavaScript object and a Map for use as a hash table?"
+    answer: "Map preserves insertion order, allows any value type as a key including objects, and provides a cleaner API for size and iteration, while plain objects coerce non-string keys to strings and inherit properties from the prototype chain that can cause subtle bugs."
+  - question: "Why do hash tables degrade to O(n) in the worst case?"
+    answer: "If many keys collide into the same bucket, that bucket's internal list grows long, and looking up a key inside it becomes a linear scan, which is why a well-distributed hash function and periodic resizing matter for maintaining good performance."
+references:
+  - title: "MDN — Map"
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map"
+  - title: "MDN — Set"
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set"
+  - title: "GeeksforGeeks — Hashing Data Structure"
+    url: "https://www.geeksforgeeks.org/dsa/hashing-data-structure/"
+---
+
+## Introduction
+
+If there is one data structure that shows up in more interview solutions than any other, it is the hash table. Anytime a problem needs "have I seen this before" or "how many times does this appear," a hash table almost certainly belongs in the solution. This guide explains how hash tables achieve near-constant time operations and walks through the interview patterns built on top of them.
+
+## The Core Idea
+
+A hash table stores key-value pairs by running each key through a hash function that converts it into a number, then using that number (typically reduced with a modulo operation) as an index into an underlying array of "buckets":
+
+```text
+key "apple"  -> hash function -> 47 -> bucket index 47 % 16 = 15
+key "banana" -> hash function -> 12 -> bucket index 12 % 16 = 12
+```
+
+Looking up a key repeats the same process: hash the key, jump directly to that bucket, and check what is stored there — no need to scan through every entry, which is what makes hash table operations so fast compared to a plain array or list.
+
+## Using Hash Tables in JavaScript
+
+JavaScript provides two built-in hash-table-like structures: plain objects and `Map`.
+
+```javascript
+// Map: cleaner semantics for use as a general-purpose hash table
+const ages = new Map();
+ages.set("Ada", 28);
+ages.set("Alan", 34);
+
+console.log(ages.get("Ada"));    // 28
+console.log(ages.has("Grace")); // false
+console.log(ages.size);         // 2
+
+for (const [name, age] of ages) {
+  console.log(name, age);
+}
+```
+
+`Map` is generally preferable to a plain object for hash-table-style use: it preserves insertion order predictably, accepts any value (including objects) as a key without coercion to a string, and does not inherit unrelated properties from a prototype chain the way plain objects do.
+
+## Collisions and How They're Handled
+
+Two different keys can hash to the same bucket index — a collision — and every hash table implementation needs a strategy to handle this:
+
+- **Chaining** — each bucket holds a small list of entries; on collision, the new entry is simply appended to that bucket's list.
+- **Open addressing** — on collision, the table probes for the next available slot according to some rule, rather than storing multiple entries per bucket.
+
+```text
+Bucket 12: [("banana", 5)]
+Bucket 15: [("apple", 3), ("grape", 9)]  <- collision handled via chaining
+```
+
+With a well-distributed hash function and a reasonable load factor (ratio of entries to buckets), the average bucket holds very few entries, keeping lookups close to O(1). If the hash function is poor, or too many entries share a table that is too small, buckets grow long and lookups degrade toward O(n).
+
+## Classic Pattern: Frequency Counting
+
+```javascript
+function mostFrequentChar(str) {
+  const counts = new Map();
+  for (const ch of str) {
+    counts.set(ch, (counts.get(ch) || 0) + 1);
+  }
+
+  let maxChar = null;
+  let maxCount = 0;
+  for (const [ch, count] of counts) {
+    if (count > maxCount) {
+      maxChar = ch;
+      maxCount = count;
+    }
+  }
+  return maxChar;
+}
+
+console.log(mostFrequentChar("mississippi")); // "i"
+```
+
+## Classic Pattern: Two Sum
+
+The two-sum problem is practically the "hello world" of hash table interview questions, and it demonstrates the core trick of trading an extra pass for a huge complexity improvement:
+
+```javascript
+function twoSum(nums, target) {
+  const seen = new Map(); // value -> index
+
+  for (let i = 0; i < nums.length; i++) {
+    const complement = target - nums[i];
+    if (seen.has(complement)) {
+      return [seen.get(complement), i];
+    }
+    seen.set(nums[i], i);
+  }
+
+  return null;
+}
+
+console.log(twoSum([2, 7, 11, 15], 9)); // [0, 1]
+```
+
+A brute-force solution checking every pair takes O(n²) time. Storing each value's index in a hash map as you scan reduces this to O(n) time (with O(n) extra space), because checking whether the complement exists becomes a constant-time lookup instead of a nested loop.
+
+## Classic Pattern: Detecting Duplicates
+
+```javascript
+function hasDuplicate(nums) {
+  const seen = new Set();
+  for (const num of nums) {
+    if (seen.has(num)) return true;
+    seen.add(num);
+  }
+  return false;
+}
+```
+
+`Set` is effectively a hash table that only stores keys, without associated values, and it is the right tool whenever a problem is really asking "have I seen this before," rather than needing to associate any extra data with each item.
+
+## Classic Pattern: Grouping
+
+```javascript
+function groupByFirstLetter(words) {
+  const groups = new Map();
+  for (const word of words) {
+    const key = word[0];
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(word);
+  }
+  return groups;
+}
+
+console.log(groupByFirstLetter(["apple", "banana", "avocado", "blueberry"]));
+// Map { 'a' => ['apple', 'avocado'], 'b' => ['banana', 'blueberry'] }
+```
+
+## Best Practices
+
+- Reach for a hash map any time a problem involves counting, grouping, or checking membership repeatedly.
+- Prefer `Map`/`Set` over plain objects for general-purpose hash table use in JavaScript, to avoid prototype-related surprises.
+- State the time/space trade-off explicitly when using a hash map to speed up a brute-force solution — it usually trades O(n) extra space for a large improvement in time complexity.
+- Be mindful of what makes a good key; mutable objects used as keys can behave unexpectedly if their contents change after being inserted.
+
+## Common Mistakes to Avoid
+
+- Reaching for nested loops out of habit when a single pass with a hash map would solve the same problem in linear time.
+- Using a plain JavaScript object as a hash table without considering that all keys are coerced to strings, which can silently merge distinct numeric and string keys.
+- Forgetting to initialize a bucket/array/list the first time a new key is encountered when grouping or counting.
+- Assuming hash table operations are always O(1) without acknowledging the (rare, but real) worst-case degradation from poor hashing or high load factors.
+
+## Designing a Good Hash Function
+
+A hash table's performance guarantees rest entirely on the quality of its underlying hash function. A good hash function needs two properties: it must be deterministic (the same key always produces the same hash), and it should distribute keys as uniformly as possible across the available buckets, so that no single bucket becomes a bottleneck:
+
+```javascript
+function simpleStringHash(key, bucketCount) {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) % bucketCount;
+  }
+  return hash;
+}
+```
+
+Multiplying by a prime number (31 is a common choice) as each character is folded in helps spread similar strings — like "cat" and "cats" — into different buckets rather than colliding predictably, which a naive hash (like just summing character codes) would tend to do for permutations of the same characters. When two different keys do hash to the same bucket — a collision, which is unavoidable in any hash table once enough keys are inserted — the two most common resolution strategies are chaining (each bucket holds a small list of entries that share that bucket) and open addressing (probing for the next available slot). In practice, you will rarely implement a hash function yourself; JavaScript's `Map`, Python's `dict`, and Java's `HashMap` all use well-tested, uniformly-distributing hash functions internally. Understanding how they work under the hood, though, explains why hash table performance can degrade if a huge number of keys happen to collide, and why choosing good, well-distributed keys matters even when you are not writing the hashing logic yourself.
+
+## Conclusion
+
+Hash tables are the closest thing to a superpower in everyday algorithm problems: trading a small amount of extra memory for a dramatic reduction in time complexity, often turning an O(n²) brute-force solution into a clean O(n) pass. Once "can I use a hash map here" becomes a reflexive first question when facing a new problem, a large share of interview questions become noticeably more approachable.

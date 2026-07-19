@@ -1,0 +1,207 @@
+---
+title: "Node.js Event Emitter Patterns"
+description: "Learn how Node.js's EventEmitter works and explore practical patterns for building event-driven modules, including error handling and avoiding memory leaks."
+category: nodejs
+tags: ["nodejs", "events", "eventemitter", "design-patterns"]
+author: arjun-mehta
+publishedAt: "2024-10-06"
+updatedAt: "2024-12-10"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is EventEmitter used for in Node.js?"
+    answer: "EventEmitter is the core building block behind Node's event-driven architecture, used internally by streams, HTTP servers, and many core modules to notify listeners when something happens, without those parts being tightly coupled together."
+  - question: "What happens if an EventEmitter emits an error event with no listener?"
+    answer: "If no listener is registered for the special error event, Node throws that error and, by default, crashes the process, which is why every EventEmitter that can fail should always have an error listener attached."
+  - question: "Can one event have multiple listeners?"
+    answer: "Yes, and by default up to 10 listeners can be attached to a single event before Node prints a memory leak warning; this limit can be adjusted with setMaxListeners when a higher number is genuinely expected."
+  - question: "What is the difference between on() and once()?"
+    answer: "on() registers a listener that runs every time the event is emitted, while once() registers a listener that runs only for the very next emission and is then automatically removed."
+references:
+  - title: "Node.js Docs — Events"
+    url: "https://nodejs.org/api/events.html"
+  - title: "Node.js Docs — EventEmitter class"
+    url: "https://nodejs.org/api/events.html#class-eventemitter"
+  - title: "Node.js Guide — The Node.js Event Emitter"
+    url: "https://nodejs.org/en/learn/asynchronous-work/the-nodejs-event-emitter"
+---
+
+## Introduction
+
+Long before Promises and async/await, Node.js already had a simple, powerful pattern for handling asynchronous, decoupled communication between parts of a program: the `EventEmitter`. It underlies streams, HTTP servers, child processes, and countless third-party libraries. Learning to use it directly — not just consume it through other APIs — opens up a clean way to design your own event-driven modules.
+
+## The Basics of EventEmitter
+
+```javascript
+import { EventEmitter } from "events";
+
+const emitter = new EventEmitter();
+
+emitter.on("greet", (name) => {
+  console.log(`Hello, ${name}!`);
+});
+
+emitter.emit("greet", "Ada"); // Hello, Ada!
+```
+
+`on()` registers a listener for a named event, and `emit()` synchronously calls every listener registered for that event, in the order they were added, passing along any extra arguments.
+
+## Building a Custom EventEmitter Class
+
+The most common real-world pattern extends `EventEmitter` to build a module that reports on its own lifecycle:
+
+```javascript
+import { EventEmitter } from "events";
+
+class OrderProcessor extends EventEmitter {
+  async process(order) {
+    this.emit("started", order.id);
+    try {
+      await validateOrder(order);
+      await chargePayment(order);
+      this.emit("completed", order.id);
+    } catch (error) {
+      this.emit("error", error);
+    }
+  }
+}
+
+const processor = new OrderProcessor();
+processor.on("started", (id) => console.log(`Processing order ${id}`));
+processor.on("completed", (id) => console.log(`Order ${id} completed`));
+processor.on("error", (err) => console.error("Order failed:", err.message));
+
+processor.process({ id: 101 });
+```
+
+This design decouples the processing logic from whatever needs to react to it — logging, notifications, metrics — without `OrderProcessor` needing to know about any of those consumers directly.
+
+## The Special error Event
+
+`EventEmitter` treats the `"error"` event differently from every other event name: if you emit `"error"` and no listener is attached, Node throws the error and, by default, crashes the process.
+
+```javascript
+const emitter = new EventEmitter();
+emitter.emit("error", new Error("boom")); // crashes if unhandled!
+
+// Always attach a handler if the emitter can fail:
+emitter.on("error", (err) => console.error("Handled:", err.message));
+```
+
+This is a deliberate design choice: it forces you to acknowledge that something can fail, rather than silently swallowing errors.
+
+## once() for One-Time Events
+
+```javascript
+const emitter = new EventEmitter();
+
+emitter.once("ready", () => console.log("This runs only the first time"));
+
+emitter.emit("ready"); // logs the message
+emitter.emit("ready"); // does nothing, listener was already removed
+```
+
+`once` is useful for initialization events, or anywhere a listener should only ever respond to the first occurrence of something.
+
+## Removing Listeners and Preventing Leaks
+
+Long-lived emitters that keep accumulating listeners without ever removing them are a classic source of memory leaks:
+
+```javascript
+function handler(data) {
+  console.log(data);
+}
+
+emitter.on("update", handler);
+// ... later, when no longer needed:
+emitter.off("update", handler); // or emitter.removeListener(...)
+```
+
+Node warns by default when more than 10 listeners are attached to the same event on one emitter, since that pattern often (but not always) indicates a leak. You can raise the limit deliberately with `emitter.setMaxListeners(n)` when a higher number is genuinely expected.
+
+## Passing Multiple Arguments
+
+Any additional arguments passed to `emit` are forwarded directly to each listener:
+
+```javascript
+emitter.emit("userUpdated", userId, changes, timestamp);
+
+emitter.on("userUpdated", (userId, changes, timestamp) => {
+  console.log(userId, changes, timestamp);
+});
+```
+
+For more than two or three values, passing a single object is usually clearer than a long positional argument list.
+
+## Combining EventEmitter with Async Code
+
+`EventEmitter` itself is synchronous — listeners run immediately when `emit` is called — but listeners are free to kick off asynchronous work themselves:
+
+```javascript
+emitter.on("fileUploaded", async (filePath) => {
+  await generateThumbnail(filePath);
+  emitter.emit("thumbnailReady", filePath);
+});
+```
+
+Just be aware that `emit` does not wait for asynchronous listeners to finish; if you need to know when all listeners have completed their async work, you need a different coordination mechanism, such as tracking Promises explicitly.
+
+## Best Practices
+
+- Always attach an `error` listener to any EventEmitter that might emit one, to avoid unhandled crashes.
+- Remove listeners you no longer need, especially in long-running processes or components that get created and destroyed repeatedly.
+- Use `once()` for events that should only ever be handled a single time.
+- Prefer descriptive, namespaced event names (`order:completed` rather than just `completed`) in larger systems with many emitters.
+- Document the events a class emits and their argument shapes, since there is no compile-time contract enforcing them.
+
+## Common Mistakes to Avoid
+
+- Emitting `"error"` without any listener attached, causing an unexpected process crash.
+- Registering the same listener repeatedly (for example, inside a loop or a function called multiple times) without ever removing old ones.
+- Assuming `emit()` waits for asynchronous listeners to finish before continuing.
+- Overusing events for simple request/response style communication where a direct function call or Promise would be clearer.
+
+## Namespacing Events in Larger Systems
+
+As a system grows and emits many different kinds of events, flat event names like `"completed"` or `"error"` become ambiguous — which subsystem completed what? A common convention is to namespace event names with a colon-separated prefix describing their source and action:
+
+```javascript
+class PaymentProcessor extends EventEmitter {}
+class OrderProcessor extends EventEmitter {}
+
+const payments = new PaymentProcessor();
+const orders = new OrderProcessor();
+
+payments.on("payment:completed", (id) => console.log("Payment done:", id));
+orders.on("order:completed", (id) => console.log("Order done:", id));
+
+payments.emit("payment:completed", "pay_123");
+orders.emit("order:completed", "order_456");
+```
+
+This convention does not change how `EventEmitter` behaves at all — it is purely a naming discipline — but it becomes valuable once you have logging, monitoring, or a central event bus that needs to distinguish between many different kinds of events flowing through a system. Some applications go further and route all events through a single shared emitter with namespaced names, rather than many separate emitter instances, which can simplify wiring up cross-cutting concerns like centralized logging or metrics collection for every event in the system.
+
+## Handling Errors on Emitters Correctly
+
+`EventEmitter` treats the `"error"` event as special: if an `"error"` event is emitted and there is no listener registered for it, Node.js will throw the error and, in most cases, crash the process. This is a deliberate design decision to prevent errors from silently disappearing, but it surprises developers who are used to other events simply being ignored when nothing is listening:
+
+```javascript
+import { EventEmitter } from "node:events";
+
+const connection = new EventEmitter();
+
+// Without this listener, emitting "error" below would crash the process
+connection.on("error", (err) => {
+  console.error("Connection failed:", err.message);
+});
+
+connection.emit("error", new Error("ECONNREFUSED"));
+```
+
+This behavior exists throughout Node's built-in modules — sockets, streams, and child processes all emit `"error"` this way — so any code that creates one of these objects should always attach an error listener before the object has a chance to emit one, not after. Another easy mistake is registering the same listener multiple times, for instance inside a function that gets called repeatedly, which silently causes the listener to run several times per event. `EventEmitter` also has a default cap of 10 listeners per event as a leak-detection heuristic — exceeding it logs a warning, which is often a genuine sign that listeners are being added in a loop without ever being removed, though it can be raised deliberately with `setMaxListeners()` when a higher count is actually expected and intentional.
+
+## Conclusion
+
+`EventEmitter` is a small API with an outsized influence on how Node.js code is structured. Once you start building your own event-driven classes, you gain a clean way to decouple "what happened" from "what should happen next" — the same pattern that powers everything from Node's HTTP server to its file streams.

@@ -1,0 +1,175 @@
+---
+title: "The JavaScript Event Loop Explained"
+description: "Understand how the JavaScript event loop works, including the call stack, task queue, and microtask queue, with clear diagrams-in-text and runnable examples."
+category: javascript
+tags: ["javascript", "event-loop", "asynchronous", "concurrency"]
+author: notequest-team
+publishedAt: "2024-03-08"
+updatedAt: "2024-04-18"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Is JavaScript single-threaded?"
+    answer: "Yes, JavaScript itself runs on a single thread with one call stack, meaning it can only execute one piece of code at a time. Concurrency comes from the runtime environment (browser or Node.js) offloading work like timers and I/O."
+  - question: "What is the difference between the task queue and the microtask queue?"
+    answer: "The microtask queue holds Promise callbacks and runs entirely between each task, before the next task or render. The task queue (macrotasks) holds things like setTimeout and I/O callbacks, and only one task runs per event loop tick."
+  - question: "Why does setTimeout(fn, 0) not run immediately?"
+    answer: "setTimeout always schedules a macrotask, which can only run after the current call stack is empty and after all pending microtasks have been processed, so there is always some delay even with a zero millisecond timer."
+  - question: "Can the event loop be blocked?"
+    answer: "Yes. Long-running synchronous code, like a heavy loop or JSON.parse on a huge string, blocks the single thread and prevents any other callbacks, renders, or events from being processed until it finishes."
+references:
+  - title: "MDN — Event loop"
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Event_loop"
+  - title: "Node.js — Event loop, timers, and process.nextTick"
+    url: "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
+  - title: "javascript.info — Event loop"
+    url: "https://javascript.info/event-loop"
+---
+
+## Introduction
+
+"JavaScript is single-threaded, but it's still asynchronous" is one of the most confusing sentences a new developer hears. How can something run one line at a time and still handle timers, network requests, and user clicks without freezing? The answer is the event loop — the mechanism that coordinates JavaScript's single call stack with the browser or Node.js runtime's ability to do other things in the background.
+
+This article breaks the event loop into its actual moving parts: the call stack, the Web APIs or Node APIs, the callback (task) queue, and the microtask queue, and shows how they interact through real code.
+
+## The Call Stack
+
+JavaScript executes code using a call stack: a list of function calls currently in progress, in order. When a function is called, a new frame is pushed on top; when it returns, the frame is popped off. Because there is only one stack, only one line of JavaScript ever executes at any given instant.
+
+```javascript
+function greet() {
+  console.log("Hello");
+}
+function main() {
+  greet();
+  console.log("Done");
+}
+main();
+// Call stack: main -> greet -> (pop) -> main -> (pop)
+```
+
+## Where Asynchronous Work Actually Happens
+
+When you call `setTimeout`, `fetch`, or read a file in Node.js, JavaScript does not execute that work itself. It hands the request off to the runtime (the browser's Web APIs or Node's libuv), which performs the work outside the JavaScript thread. Once that work finishes, the runtime does not jump straight back into your code — it queues a callback to run later, when the call stack is empty.
+
+```javascript
+console.log("1: start");
+
+setTimeout(() => console.log("2: timeout callback"), 0);
+
+console.log("3: end");
+
+// Output:
+// 1: start
+// 3: end
+// 2: timeout callback
+```
+
+Even with a zero-millisecond delay, "2" prints last, because the timeout callback must wait for the current synchronous code to finish and be queued as a task.
+
+## Two Queues: Macrotasks and Microtasks
+
+This is the part most explanations skip. There is not just one queue — there are (at least) two, and they are processed differently:
+
+- **Macrotasks (the task queue):** `setTimeout`, `setInterval`, I/O callbacks, UI events. The event loop runs exactly one macrotask per loop iteration.
+- **Microtasks (the microtask queue):** Promise `.then`/`.catch`/`.finally` callbacks, and `queueMicrotask`. After every macrotask (and after the initial script), the engine drains the *entire* microtask queue before doing anything else — including rendering or running the next macrotask.
+
+```javascript
+console.log("1: script start");
+
+setTimeout(() => console.log("2: setTimeout"), 0);
+
+Promise.resolve().then(() => console.log("3: promise"));
+
+console.log("4: script end");
+
+// Output:
+// 1: script start
+// 4: script end
+// 3: promise
+// 2: setTimeout
+```
+
+Even though the timeout was scheduled first, the Promise callback runs before it, because microtasks always drain completely before the next macrotask begins.
+
+## Putting It All Together: The Event Loop Algorithm
+
+At a high level, the loop repeats these steps forever:
+
+1. Run the oldest task in the macrotask queue (or the initial script on the very first pass).
+2. Run every microtask currently in the microtask queue, including any new ones added while draining it.
+3. If in a browser, potentially render an updated frame.
+4. Go back to step 1.
+
+This explains why Promise chains always "cut in line" ahead of timers, and why a chain of ten chained `.then()` calls all resolve before a single `setTimeout(fn, 0)` fires.
+
+## A Practical Consequence: Don't Block the Loop
+
+Because there is only one thread, any synchronous code that takes a long time to run — a huge loop, a large JSON parse, a deeply recursive function — freezes everything else: timers do not fire, clicks do not register, and Promises do not resolve, until that code finishes.
+
+```javascript
+function blockFor(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {} // busy-wait, blocks everything
+}
+
+setTimeout(() => console.log("This is delayed"), 0);
+blockFor(3000); // nothing else can happen for 3 seconds
+console.log("Blocking code finished");
+```
+
+In Node.js, CPU-heavy work should be offloaded to worker threads or a separate process; in the browser, Web Workers serve the same purpose, since they run on their own thread with their own event loop.
+
+## Best Practices
+
+- Break up long synchronous operations into smaller chunks (e.g., using `setTimeout` or `requestIdleCallback`) so the loop can still handle other events.
+- Remember that Promise callbacks always run before the next timer, which matters when ordering matters for your logic.
+- Use `async/await` for readability, but remember it is still governed by the same microtask/macrotask rules underneath.
+- Move CPU-intensive work to Web Workers (browser) or worker_threads/child processes (Node.js) instead of blocking the main thread.
+- Use browser or Node performance profiling tools to spot long tasks that are delaying user interactions.
+
+## Common Mistakes to Avoid
+
+- Assuming `setTimeout(fn, 0)` runs "immediately" — it is still a macrotask and always waits for the current stack and all microtasks to clear.
+- Writing recursive Promise chains that never let the macrotask queue run, effectively starving timers and I/O.
+- Confusing "asynchronous" with "runs on another thread" — JavaScript callbacks always execute on the same single thread, just at a later point in time.
+- Not accounting for microtask starvation, where an endless chain of `.then()` calls can delay rendering or timers indefinitely.
+
+## Where Rendering Fits In
+
+In a browser, there is one more piece to this picture: rendering. After the microtask queue drains, and before the next macrotask runs, the browser gets a chance to paint an updated frame if one is needed. This is why `requestAnimationFrame` exists as a separate scheduling primitive from `setTimeout`:
+
+```javascript
+function animate() {
+  element.style.transform = `translateX(${position}px)`;
+  position += 2;
+  requestAnimationFrame(animate); // schedules right before the next repaint
+}
+requestAnimationFrame(animate);
+```
+
+`requestAnimationFrame` callbacks run right before the browser repaints, synchronized with the display's refresh rate, which makes animation smoother and more efficient than driving it with an arbitrary `setTimeout` interval that has no relationship to when the screen is actually about to redraw. Node.js has no rendering step at all, since it has no visual output, which is one of the concrete differences between the browser's and Node's otherwise similar event loop implementations — Node's loop instead prioritizes categories like timers, I/O callbacks, and `process.nextTick` (which behaves similarly to a microtask, running even before Promise callbacks) in a specific, well-defined order each iteration.
+
+## Visualizing the Order of Operations
+
+A concrete example makes the ordering rules easier to internalize than any description on its own. Consider this snippet, which mixes synchronous code, a microtask, and a macrotask:
+
+```javascript
+console.log("1: script start");
+
+setTimeout(() => console.log("2: setTimeout callback"), 0);
+
+Promise.resolve().then(() => console.log("3: promise callback"));
+
+console.log("4: script end");
+
+// Output order: 1, 4, 3, 2
+```
+
+Walking through why: the two `console.log` calls that are not wrapped in anything run first and synchronously, in source order, so "1" and "4" print immediately while the call stack is still busy. Only once the stack is empty does the engine drain the microtask queue, printing "3" from the resolved Promise. Only after the microtask queue is completely empty does the engine move on to the macrotask queue and run the `setTimeout` callback, printing "2" last — even though it was scheduled before the Promise callback in the source code. This exact ordering — synchronous code, then all microtasks, then one macrotask, repeat — is worth tracing through by hand a few times until it feels automatic, because it explains the majority of "why did this run in that order" questions you will encounter in real async JavaScript code.
+
+## Conclusion
+
+The event loop is what makes JavaScript's single-threaded model workable for real applications. Once you can mentally separate "the call stack," "the microtask queue," and "the macrotask queue," a lot of confusing async behavior — like why Promises resolve before timers — becomes predictable instead of mysterious. Understanding this model is one of the highest-leverage things you can learn as a JavaScript developer.

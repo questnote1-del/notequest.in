@@ -1,0 +1,233 @@
+---
+title: "State Management Patterns in React"
+description: "Explore practical React state management patterns, from local component state to context and external stores, and learn when to reach for each approach."
+category: react
+tags: ["react", "state-management", "context", "redux", "architecture"]
+author: priya-sharma
+publishedAt: "2024-06-04"
+updatedAt: "2024-08-19"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Do I always need Redux or a similar library?"
+    answer: "No. Many applications never outgrow useState and useContext. Reach for a dedicated state library once you have complex, frequently updated global state shared across many unrelated components, or need advanced features like time-travel debugging."
+  - question: "What is prop drilling and why is it a problem?"
+    answer: "Prop drilling is passing a value through several layers of components that do not use it themselves, just to reach a deeply nested child. It makes refactoring harder and clutters intermediate components with unrelated props."
+  - question: "Is Context a replacement for a state management library?"
+    answer: "Context solves the distribution problem — getting a value to deeply nested components — but it does not solve performance issues from frequent updates or provide tools like selectors, middleware, or devtools the way dedicated libraries do."
+  - question: "What is 'lifting state up'?"
+    answer: "It means moving state from a child component to their closest common ancestor so multiple siblings can read and update the same value, which is usually the simplest fix before reaching for Context or a library."
+references:
+  - title: "React Docs — Managing State"
+    url: "https://react.dev/learn/managing-state"
+  - title: "React Docs — Passing Data Deeply with Context"
+    url: "https://react.dev/learn/passing-data-deeply-with-context"
+  - title: "React Docs — Scaling Up with Reducer and Context"
+    url: "https://react.dev/learn/scaling-up-with-reducer-and-context"
+---
+
+## Introduction
+
+"How should I manage state?" is one of the first architectural questions every React project runs into, and the honest answer is: it depends on how far the state needs to travel and how often it changes. This guide walks through the state management ladder — from simple local state, up through lifting state, Context, reducers, and external stores — so you can pick the simplest tool that solves your actual problem instead of reaching for the heaviest one by default.
+
+## Level 1: Local Component State
+
+Most state belongs to a single component and never needs to leave it. `useState` is enough:
+
+```javascript
+function SearchBox() {
+  const [query, setQuery] = useState("");
+  return (
+    <input value={query} onChange={(e) => setQuery(e.target.value)} />
+  );
+}
+```
+
+If nothing outside `SearchBox` ever needs to read or change `query`, this is the entire solution. Resist the urge to promote state "just in case" it might be needed elsewhere later.
+
+## Level 2: Lifting State Up
+
+When two sibling components need to share the same state, move it to their closest common parent and pass it down as props:
+
+```javascript
+function SearchPage() {
+  const [query, setQuery] = useState("");
+  return (
+    <>
+      <SearchBox query={query} onChange={setQuery} />
+      <ResultsCount query={query} />
+    </>
+  );
+}
+```
+
+Now both `SearchBox` and `ResultsCount` read from a single source of truth. This pattern scales surprisingly far before it becomes unwieldy.
+
+## Level 3: Prop Drilling and Its Limits
+
+As your tree grows deeper, passing state through several layers of components that do not use it themselves — just to reach a distant child — becomes painful:
+
+```javascript
+function App() {
+  const [user, setUser] = useState(null);
+  return <Dashboard user={user} />;
+}
+function Dashboard({ user }) {
+  return <Sidebar user={user} />; // Sidebar doesn't use user directly
+}
+function Sidebar({ user }) {
+  return <UserBadge user={user} />; // finally used here
+}
+```
+
+Every intermediate component now has an unrelated `user` prop purely to relay it downward. This is the signal to reach for Context.
+
+## Level 4: React Context
+
+Context lets any descendant read a value directly, skipping the intermediate layers:
+
+```javascript
+const UserContext = createContext(null);
+
+function App() {
+  const [user, setUser] = useState(null);
+  return (
+    <UserContext.Provider value={user}>
+      <Dashboard />
+    </UserContext.Provider>
+  );
+}
+
+function UserBadge() {
+  const user = useContext(UserContext);
+  return <span>{user?.name}</span>;
+}
+```
+
+Context is great for values that change infrequently — theme, locale, authenticated user — but it is not a performance tool. Every component consuming a context re-renders whenever that context's value changes, so packing fast-changing data into a single large context can hurt performance.
+
+## Level 5: useReducer for Complex State Logic
+
+When state updates involve multiple related fields or several possible actions, `useReducer` centralizes the logic in one place instead of scattering it across many `setState` calls:
+
+```javascript
+function reducer(state, action) {
+  switch (action.type) {
+    case "increment":
+      return { count: state.count + 1 };
+    case "decrement":
+      return { count: state.count - 1 };
+    case "reset":
+      return { count: 0 };
+    default:
+      throw new Error("Unknown action: " + action.type);
+  }
+}
+
+function Counter() {
+  const [state, dispatch] = useReducer(reducer, { count: 0 });
+  return (
+    <>
+      <p>{state.count}</p>
+      <button onClick={() => dispatch({ type: "increment" })}>+</button>
+      <button onClick={() => dispatch({ type: "decrement" })}>-</button>
+    </>
+  );
+}
+```
+
+Combining `useReducer` with Context is a common pattern for medium-sized apps: the reducer centralizes logic, and Context distributes the resulting state and dispatch function.
+
+## Level 6: External State Libraries
+
+Once state is large, shared across unrelated parts of the tree, updated frequently, or needs devtools/middleware, dedicated libraries like Redux Toolkit, Zustand, or Jotai start paying for themselves. They typically offer:
+
+- Selective subscriptions, so components only re-render when the specific slice of state they use changes.
+- Middleware for logging, persistence, or async side effects.
+- Devtools for inspecting and time-traveling through state changes.
+
+```javascript
+// Zustand example — a small external store
+import { create } from "zustand";
+
+const useCartStore = create((set) => ({
+  items: [],
+  addItem: (item) => set((state) => ({ items: [...state.items, item] })),
+  clear: () => set({ items: [] }),
+}));
+
+function CartButton() {
+  const items = useCartStore((state) => state.items);
+  return <span>{items.length} items</span>;
+}
+```
+
+## Choosing the Right Level
+
+A practical rule of thumb: start at the lowest level that works, and only move up when you feel real pain — unnecessary prop drilling, tangled update logic, or performance issues from over-broad re-renders. Most components should never need anything beyond local state and props.
+
+## Best Practices
+
+- Keep state as close as possible to the components that use it; lift it only as far as necessary.
+- Split Context providers by concern (theme, auth, cart) instead of one giant "app state" context.
+- Use `useReducer` when more than two or three related state transitions exist for the same piece of data.
+- Memoize context values with `useMemo` to avoid needless re-renders of consumers when the provider re-renders for unrelated reasons.
+- Evaluate whether a problem is really a "sharing" problem (Context) or a "performance/tooling" problem (external store) before choosing a solution.
+
+## Common Mistakes to Avoid
+
+- Reaching for a state management library on day one, before the app has any real complexity to justify it.
+- Putting every piece of state into one massive Context, causing unrelated components to re-render on every change.
+- Duplicating state that could be derived from existing state or props, leading to state that can drift out of sync.
+- Ignoring performance profiling and assuming "Context is slow" or "Redux is necessary" without measuring actual re-render costs.
+
+## A Worked Example: Shopping Cart State
+
+To see the ladder in action, consider a shopping cart feature evolving as requirements grow. It starts as local state inside a single component:
+
+```javascript
+function ProductPage({ product }) {
+  const [cartItems, setCartItems] = useState([]);
+  // fine as long as only this page needs the cart
+}
+```
+
+Once the site adds a persistent cart icon in the header, showing the item count on every page, the state needs to be shared beyond one component's subtree — a natural case for `useReducer` plus Context, since cart updates involve several related actions (add, remove, update quantity):
+
+```javascript
+function cartReducer(state, action) {
+  switch (action.type) {
+    case "add":
+      return [...state, action.item];
+    case "remove":
+      return state.filter((item) => item.id !== action.id);
+    case "clear":
+      return [];
+    default:
+      return state;
+  }
+}
+
+const CartContext = createContext(null);
+
+function CartProvider({ children }) {
+  const [items, dispatch] = useReducer(cartReducer, []);
+  return (
+    <CartContext.Provider value={{ items, dispatch }}>
+      {children}
+    </CartContext.Provider>
+  );
+}
+```
+
+If the application later grows to need cart persistence across sessions, undo/redo, or synchronization with a backend cart API, that is usually the point where migrating to a dedicated library like Zustand or Redux Toolkit starts to pay for itself — not because Context "doesn't work," but because the surrounding tooling (persistence middleware, devtools, selector-based subscriptions) starts to matter more than simple distribution of a value through the tree.
+
+## Avoiding the Context Re-Render Trap
+
+A subtle downside of Context is that every component subscribed to it via `useContext` re-renders whenever the provided value changes — even if that component only cares about a small slice of it. Passing a brand-new object literal as the value on every render of the provider compounds this problem, since it forces every consumer to re-render on every provider render, whether the data they actually use changed or not. Splitting a single large context into several smaller, more focused contexts — one for state that changes often and one for state that rarely changes, or one context per logical concern — limits the blast radius of any single update to just the components that actually depend on it.
+
+## Conclusion
+
+There is no single correct state management pattern — only a ladder of solutions, each appropriate at a different scale. Local state, lifted state, Context, reducers, and external stores each solve a specific problem. Learning to recognize which problem you actually have is more valuable than memorizing any one library's API.

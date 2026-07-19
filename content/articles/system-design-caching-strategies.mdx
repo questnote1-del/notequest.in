@@ -1,0 +1,169 @@
+---
+title: "Caching Strategies for System Design"
+description: "Explore common caching strategies used in system design, including cache-aside, write-through, write-back, and cache invalidation approaches, with trade-offs..."
+category: system-design
+tags: ["system-design", "caching", "scalability", "performance"]
+author: arjun-mehta
+publishedAt: "2025-11-18"
+updatedAt: "2026-01-03"
+featured: false
+popular: true
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the most commonly used caching strategy?"
+    answer: "Cache-aside (also called lazy loading) is the most common pattern: the application checks the cache first, and on a miss, loads the data from the database and stores it in the cache for subsequent requests."
+  - question: "What is cache invalidation and why is it considered hard?"
+    answer: "Cache invalidation means removing or updating stale cached data when the underlying source changes. It is considered hard because tracking every place a piece of data might be cached, and ensuring updates propagate correctly, grows complex quickly in real systems."
+  - question: "What is the difference between write-through and write-back caching?"
+    answer: "Write-through writes to the cache and the database at the same time, keeping them consistent but adding latency to every write. Write-back writes to the cache first and updates the database asynchronously later, which is faster but risks data loss if the cache fails before the write is flushed."
+  - question: "What causes a cache stampede?"
+    answer: "A cache stampede happens when a popular cached item expires and many concurrent requests all miss the cache at once, each triggering a redundant, expensive database query simultaneously instead of a single request refreshing the cache for everyone."
+references:
+  - title: "AWS — Caching Overview"
+    url: "https://aws.amazon.com/caching/"
+  - title: "MDN — HTTP caching"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+  - title: "Redis Docs — Introduction"
+    url: "https://redis.io/docs/latest/develop/get-started/"
+---
+
+## Introduction
+
+Caching is one of the most effective tools in system design for reducing latency and database load, but it also introduces one of the hardest problems in computer science: knowing when cached data has gone stale. This guide walks through the major caching strategies, their trade-offs, and the invalidation problem that ties them all together.
+
+## Why Cache at All?
+
+Databases are usually the slowest and most expensive-to-scale part of a system. A cache — typically an in-memory store like Redis or Memcached — sits between the application and the database, serving frequently requested data far faster than a database query would, and absorbing read traffic that would otherwise hit the database directly.
+
+```text
+Without cache: App -> Database (every request)
+With cache:    App -> Cache (hit, fast) -> Database (only on miss)
+```
+
+## Cache-Aside (Lazy Loading)
+
+The application is responsible for checking the cache first, and populating it on a miss:
+
+```javascript
+async function getUser(id) {
+  const cached = await redis.get(`user:${id}`);
+  if (cached) return JSON.parse(cached);
+
+  const user = await db.query("SELECT * FROM users WHERE id = $1", [id]);
+  await redis.set(`user:${id}`, JSON.stringify(user), "EX", 3600); // 1 hour TTL
+  return user;
+}
+```
+
+This is the most common pattern because it only caches data that is actually requested, and the cache can be entirely wiped without permanently losing data — it will simply repopulate on the next request. The trade-off is that the very first request for any given key always pays the full database latency.
+
+## Write-Through Caching
+
+The application writes to the cache and the database together, keeping them consistent at write time:
+
+```javascript
+async function updateUser(id, data) {
+  await db.query("UPDATE users SET name = $1 WHERE id = $2", [data.name, id]);
+  await redis.set(`user:${id}`, JSON.stringify(data), "EX", 3600);
+}
+```
+
+Reads are always fast and fresh, since the cache is updated at the same time as the source of truth. The cost is added latency on every write, since it now involves two systems instead of one.
+
+## Write-Back (Write-Behind) Caching
+
+Writes go to the cache first and are asynchronously flushed to the database later, batching multiple updates together:
+
+```text
+Write -> Cache (fast, immediate acknowledgment)
+      -> (later, in a batch) -> Database
+```
+
+This dramatically speeds up writes and can reduce database load through batching, but it introduces real risk: if the cache fails before a pending write is flushed, that data is lost. Write-back is typically reserved for scenarios where some data loss risk is acceptable in exchange for write throughput, such as high-volume metrics or analytics counters.
+
+## Read-Through Caching
+
+Similar to cache-aside, but the caching logic lives inside the caching layer itself rather than the application: the application always queries the cache, and the cache is responsible for loading from the database on a miss. This centralizes the loading logic but requires a caching layer that supports it directly.
+
+## Cache Invalidation Strategies
+
+Once data changes, cached copies need to be dealt with. Three common approaches:
+
+```text
+TTL-based expiration: Cache entries expire automatically after a set time.
+                       Simple, but data can be stale for up to the TTL duration.
+
+Explicit invalidation: The application deletes or updates the cache entry
+                       immediately when the underlying data changes.
+
+Event-based invalidation: A message/event triggers cache invalidation across
+                       all services that might have cached the affected data.
+```
+
+```javascript
+async function updateUserName(id, name) {
+  await db.query("UPDATE users SET name = $1 WHERE id = $2", [name, id]);
+  await redis.del(`user:${id}`); // explicit invalidation on write
+}
+```
+
+## The Cache Stampede Problem
+
+If a very popular cache key expires and hundreds of concurrent requests all miss at the same instant, they can all independently query the database simultaneously, momentarily overwhelming it:
+
+```text
+Cache key expires
+  -> Request A misses -> queries DB
+  -> Request B misses -> queries DB  (at the same time!)
+  -> Request C misses -> queries DB  (at the same time!)
+  ... hundreds more, all hitting the DB simultaneously
+```
+
+Common mitigations include locking (only one request refreshes the cache while others wait briefly), staggered/jittered TTLs so many keys do not expire at the exact same moment, and serving slightly stale data while a background refresh completes.
+
+## Choosing Where to Cache
+
+Caching can happen at multiple layers of a system simultaneously:
+
+```text
+Browser cache      -> avoids network requests entirely for repeat visits
+CDN / edge cache    -> caches static assets and some API responses close to users
+Application cache   -> Redis/Memcached, caches database query results
+Database query cache -> caches results of expensive queries within the database itself
+```
+
+Each layer trades off freshness against speed differently, and a well-designed system often uses several layers together for different kinds of data.
+
+## Best Practices
+
+- Set sensible TTLs based on how frequently the underlying data actually changes, rather than picking one default value everywhere.
+- Explicitly invalidate cache entries on writes for data where staleness is unacceptable, rather than relying purely on TTL expiration.
+- Add jitter to TTLs for high-traffic keys to avoid many keys expiring simultaneously and causing a stampede.
+- Monitor cache hit rate as a key operational metric — a low hit rate often signals a TTL or invalidation strategy that needs tuning.
+- Choose write-through for consistency-sensitive data and consider write-back only where some risk of data loss is genuinely acceptable.
+
+## Common Mistakes to Avoid
+
+- Caching data indefinitely with no TTL and no invalidation strategy, leading to stale data that never gets refreshed.
+- Using write-back caching for data where losing recent writes would be unacceptable, such as financial transactions.
+- Ignoring the cache stampede problem for high-traffic keys, leading to periodic spikes of database load exactly when a popular cache entry expires.
+- Caching at only one layer when multiple layers (CDN, application cache, browser cache) could each reduce load for a different part of the request path.
+
+## Eviction Policies: What Happens When the Cache Is Full
+
+Caches have finite memory, so every cache needs a policy for deciding what to remove once it fills up. The most common policy, Least Recently Used (LRU), evicts whichever entry has gone the longest without being accessed — the intuition being that data accessed recently is likely to be accessed again soon (a pattern called temporal locality):
+
+```text
+Cache capacity: 3
+Access order: A, B, C, A, D
+  -> after A, B, C: cache = [A, B, C]
+  -> access A again: A moves to "most recently used" position
+  -> access D: cache is full, evict C (least recently used) -> cache = [A, D, B]
+```
+
+LRU is popular because it is cheap to implement efficiently — a combination of a hash map and a doubly linked list gives O(1) reads and writes — and it performs well for the access patterns most applications actually exhibit, where recently-viewed data tends to be requested again soon. Other policies exist for different access patterns: Least Frequently Used (LFU) tracks access counts instead of recency, which handles cases where a small set of items is consistently hot regardless of when they were last touched; and simple time-to-live (TTL) expiration, often combined with LRU, bounds how long any entry can stay cached regardless of how often it is accessed, which matters for data that must eventually go stale even if it stays popular. Most managed caching systems, including Redis, support configuring an eviction policy directly, so this is often a configuration decision rather than something you need to implement yourself.
+
+## Conclusion
+
+Every caching strategy trades some combination of consistency, latency, and complexity for improved read performance. Cache-aside is the right default for most applications; write-through and write-back exist for specific consistency and throughput needs. The hardest part is rarely choosing a strategy — it is deciding how and when cached data gets invalidated, which deserves as much design attention as the caching strategy itself.

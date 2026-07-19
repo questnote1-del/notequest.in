@@ -1,0 +1,236 @@
+---
+title: "TypeScript Generics: A Practical Guide"
+description: "Learn TypeScript generics from the ground up with practical examples covering generic functions, constraints, default types, and generic React-style utilities."
+category: typescript
+tags: ["typescript", "generics", "types", "advanced"]
+author: priya-sharma
+publishedAt: "2024-04-12"
+updatedAt: "2024-06-06"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What problem do generics actually solve?"
+    answer: "Generics let you write a single function, type, or class that works correctly with many different types while still preserving type information, instead of duplicating code for each type or falling back to unsafe any types."
+  - question: "What does extends mean in a generic type parameter?"
+    answer: "It constrains the generic type to only accept types that satisfy a certain shape, for example T extends { id: number } means T can be any object type as long as it has a numeric id property."
+  - question: "Can generics have default types?"
+    answer: "Yes. You can write something like function wrap<T = string>(value: T) so that if the caller does not supply a type argument and it cannot be inferred, TypeScript falls back to the default."
+  - question: "Are generics only useful for functions?"
+    answer: "No. Generics apply to functions, interfaces, type aliases, and classes. A generic interface like Box<T> or a generic class like Stack<T> is just as common as a generic function."
+references:
+  - title: "TypeScript Handbook — Generics"
+    url: "https://www.typescriptlang.org/docs/handbook/2/generics.html"
+  - title: "TypeScript Handbook — Utility Types"
+    url: "https://www.typescriptlang.org/docs/handbook/utility-types.html"
+  - title: "TypeScript Handbook — Type Manipulation"
+    url: "https://www.typescriptlang.org/docs/handbook/2/types-from-types.html"
+---
+
+## Introduction
+
+Generics are one of the features that separate "I know some TypeScript" from "I can write reusable, type-safe TypeScript." They let you build functions, interfaces, and classes that work across many types without giving up type safety or resorting to `any`. If you have ever written the same function twice just to change one type, generics are the fix.
+
+## The Problem Generics Solve
+
+Imagine a function that wraps a value in an array. Without generics, you either lose type information or duplicate the function per type:
+
+```typescript
+function wrapInArrayUnsafe(value: any): any[] {
+  return [value];
+}
+
+const result = wrapInArrayUnsafe(42);
+// result is typed as any[], so TypeScript can't help you here
+```
+
+With a generic type parameter, TypeScript preserves the exact type through the function:
+
+```typescript
+function wrapInArray<T>(value: T): T[] {
+  return [value];
+}
+
+const numbers = wrapInArray(42);       // number[]
+const strings = wrapInArray("hello");  // string[]
+```
+
+`T` is a placeholder — TypeScript infers it from the argument you pass, and the return type automatically reflects that same type.
+
+## Generic Functions with Multiple Type Parameters
+
+Generics are not limited to one type parameter:
+
+```typescript
+function pair<A, B>(first: A, second: B): [A, B] {
+  return [first, second];
+}
+
+const result = pair("id", 42); // [string, number]
+```
+
+## Generic Interfaces and Type Aliases
+
+Generics apply to object shapes too, which is extremely common for API responses:
+
+```typescript
+interface ApiResponse<T> {
+  data: T;
+  success: boolean;
+  error?: string;
+}
+
+interface User {
+  id: number;
+  name: string;
+}
+
+const response: ApiResponse<User> = {
+  data: { id: 1, name: "Ada" },
+  success: true,
+};
+```
+
+The same `ApiResponse` shape can now describe a response containing a `User`, a `Product`, or an array of either, without rewriting the interface each time.
+
+## Constraining Generics with extends
+
+Sometimes a generic type needs to guarantee it has certain properties. The `extends` keyword constrains what can be passed in:
+
+```typescript
+function getId<T extends { id: number }>(item: T): number {
+  return item.id;
+}
+
+getId({ id: 1, name: "Ada" });  // OK
+getId({ name: "no id here" });  // Error: missing property 'id'
+```
+
+This keeps the flexibility of generics while still enforcing the minimum shape your function actually needs.
+
+## Default Type Parameters
+
+You can give a generic parameter a default, used when TypeScript cannot infer one and the caller does not specify it:
+
+```typescript
+interface Cache<T = string> {
+  get(key: string): T | undefined;
+  set(key: string, value: T): void;
+}
+
+const stringCache: Cache = { /* T defaults to string */
+  get: () => undefined,
+  set: () => {},
+};
+```
+
+## A Generic Class Example: Stack
+
+```typescript
+class Stack<T> {
+  private items: T[] = [];
+
+  push(item: T): void {
+    this.items.push(item);
+  }
+
+  pop(): T | undefined {
+    return this.items.pop();
+  }
+
+  peek(): T | undefined {
+    return this.items[this.items.length - 1];
+  }
+
+  get size(): number {
+    return this.items.length;
+  }
+}
+
+const numberStack = new Stack<number>();
+numberStack.push(10);
+numberStack.push(20);
+console.log(numberStack.pop()); // 20
+```
+
+## Generics with Built-in Utility Types
+
+TypeScript's built-in utility types are themselves generic, and understanding generics helps you use them well:
+
+```typescript
+interface Todo {
+  id: number;
+  title: string;
+  completed: boolean;
+}
+
+type TodoPreview = Pick<Todo, "id" | "title">;
+type PartialTodo = Partial<Todo>;
+type ReadonlyTodo = Readonly<Todo>;
+```
+
+`Pick<T, K>`, `Partial<T>`, and `Readonly<T>` are all generic types that transform another type — the same mental model as the generic functions above.
+
+## Best Practices
+
+- Name generic parameters meaningfully in complex code (`TItem`, `TResponse`) rather than always using a bare `T` when there are several.
+- Constrain generics with `extends` whenever your function relies on specific properties, instead of casting inside the function body.
+- Prefer letting TypeScript infer generic arguments from the call site rather than specifying them manually every time.
+- Use generic interfaces for anything shaped like a container — API responses, caches, collections — instead of duplicating interfaces per type.
+- Reach for the built-in utility types (`Partial`, `Pick`, `Omit`, `Record`) before writing your own generic helper; they cover most common cases.
+
+## Common Mistakes to Avoid
+
+- Adding a generic parameter that is never actually used to constrain or connect two parts of a function — if `T` only appears once, you may not need generics at all.
+- Over-constraining generics so tightly that the function loses the flexibility that made generics worth using in the first place.
+- Using `any` instead of a generic parameter "to make the error go away," which removes the type safety generics were meant to add.
+- Forgetting that class-level generics (`class Stack<T>`) apply to every method in the class, not just one.
+
+## Combining Generics with keyof
+
+A particularly powerful pattern combines a generic type parameter with `keyof`, letting you write a function that safely accesses any property of an object without knowing its exact shape ahead of time:
+
+```typescript
+function getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {
+  return obj[key];
+}
+
+const user = { id: 1, name: "Ada", email: "ada@example.com" };
+
+const name = getProperty(user, "name");   // inferred as string
+const id = getProperty(user, "id");       // inferred as number
+const bad = getProperty(user, "unknown"); // Error: "unknown" is not a key of user
+```
+
+Here, `K extends keyof T` constrains the second parameter to only the actual property names of `T`, and the return type `T[K]` looks up exactly what type that specific property holds. This gives you a generic, reusable accessor function that remains fully type-safe — TypeScript will reject any key that does not really exist on the object, and it will correctly infer the return type based on which key you passed in. This pattern shows up constantly in utility libraries, form libraries, and anywhere you need to work generically with "some property of some object" while keeping full type safety intact.
+
+## Generic Defaults for Simpler Call Sites
+
+Generic parameters can have default types, which lets callers omit the type argument entirely in the common case while still allowing an explicit override when needed:
+
+```typescript
+interface ApiResponse<TData = unknown> {
+  data: TData;
+  status: number;
+  message: string;
+}
+
+function createEmptyResponse(): ApiResponse {
+  return { data: undefined, status: 204, message: "No Content" };
+}
+
+const userResponse: ApiResponse<{ id: number; name: string }> = {
+  data: { id: 1, name: "Ada" },
+  status: 200,
+  message: "OK",
+};
+```
+
+Without the default, every single usage of `ApiResponse` — even ones that genuinely do not care about the shape of `data` — would be forced to supply a type argument or fall back to an implicit `any`. The default `TData = unknown` means simple cases stay simple, while call sites that do care about the payload shape can still specify it explicitly. This same pattern shows up in many popular libraries' type definitions, where a generic component or function has a sensible default that covers 80% of use cases without requiring every consumer to think about type parameters at all.
+
+A good habit when writing your own generic functions is to let TypeScript infer type arguments from usage whenever possible, rather than requiring callers to specify them explicitly. If a function's parameter types already reference the generic parameter — as in `function identity<T>(value: T): T` — TypeScript infers `T` automatically from whatever argument is actually passed, and explicit type arguments become an escape hatch for the rare case where inference alone cannot determine the right type, rather than something every caller needs to write out by hand.
+
+## Conclusion
+
+Generics let you write less code while keeping more type safety — the opposite of what usually happens when you try to make code more flexible. Once you get comfortable with a plain `<T>`, move on to constraints with `extends`, then generic interfaces, and finally generic classes. Each layer builds naturally on the last.

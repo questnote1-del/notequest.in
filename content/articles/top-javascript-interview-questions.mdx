@@ -1,0 +1,188 @@
+---
+title: "Top JavaScript Interview Questions and Answers"
+description: "A curated list of common JavaScript interview questions with clear explanations, covering closures, hoisting, the event loop, prototypes, and equality compar..."
+category: interview-questions
+tags: ["interview-questions", "javascript", "interview-prep", "career"]
+author: neha-patel
+publishedAt: "2026-05-14"
+updatedAt: "2026-07-09"
+featured: false
+popular: true
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Do interviewers expect a perfectly memorized definition for questions like 'what is a closure'?"
+    answer: "No. Interviewers generally care more about whether you understand the concept well enough to explain it in your own words and apply it to a small code example than whether you recite a textbook definition verbatim."
+  - question: "Should I prepare live coding practice alongside conceptual questions?"
+    answer: "Yes. Conceptual JavaScript questions are often paired with live coding in real interviews, so practicing writing small, correct functions under time pressure is just as important as understanding the underlying concepts theoretically."
+  - question: "Is it acceptable to say 'I don't know' to a JavaScript interview question?"
+    answer: "Yes, and it is generally better than guessing confidently and being wrong. Briefly explaining your reasoning process, or what you would check to find the answer, demonstrates good problem-solving even when you don't know the exact answer immediately."
+  - question: "How deep should my understanding of the event loop be for an interview?"
+    answer: "You should be able to explain the call stack, the difference between microtasks and macrotasks, and predict the output order of a short code snippet mixing setTimeout and Promises, which covers what most interviews actually test."
+references:
+  - title: "MDN — JavaScript guide"
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide"
+  - title: "javascript.info"
+    url: "https://javascript.info/"
+  - title: "MDN — Equality comparisons and sameness"
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Equality_comparisons_and_sameness"
+---
+
+## Introduction
+
+JavaScript interviews tend to circle back to the same handful of core concepts, tested through slightly different questions and code snippets each time. Rather than memorizing answers verbatim, this guide explains the reasoning behind each common question so you can adapt confidently to whatever specific variation an interviewer asks.
+
+## "What is a closure, and can you give an example?"
+
+A closure is a function combined with references to its surrounding lexical scope, letting it access variables from an outer function even after that function has returned.
+
+```javascript
+function makeCounter() {
+  let count = 0;
+  return () => ++count;
+}
+
+const counter = makeCounter();
+console.log(counter()); // 1
+console.log(counter()); // 2
+```
+
+A strong answer explains not just the definition, but *why* it works: the returned function keeps a live reference to `count`, so it survives after `makeCounter` finishes executing.
+
+## "What is hoisting?"
+
+Hoisting refers to JavaScript's behavior of processing variable and function declarations before executing code line by line. `var` declarations and function declarations are hoisted with an initial value (`undefined` for `var`), while `let` and `const` are hoisted into a "temporal dead zone" where accessing them before their declaration throws an error rather than returning `undefined`.
+
+```javascript
+console.log(a); // undefined (declaration hoisted, not the assignment)
+var a = 5;
+
+console.log(b); // ReferenceError: Cannot access 'b' before initialization
+let b = 10;
+```
+
+## "What is the difference between == and ===?"
+
+`===` (strict equality) compares both value and type without converting either operand. `==` (loose equality) converts operands to a common type before comparing, which can produce surprising results:
+
+```javascript
+console.log(1 === "1"); // false, different types
+console.log(1 == "1");  // true, "1" is coerced to the number 1
+
+console.log(null == undefined);  // true (special-cased)
+console.log(null === undefined); // false, different types
+
+console.log([] == false); // true! ([] coerces to "" then to 0, false coerces to 0)
+```
+
+A good answer explains why `===` is the safer default: avoiding implicit coercion prevents an entire category of confusing bugs, particularly around `[]`, `{}`, `null`, `undefined`, and empty strings.
+
+## "Explain the difference between null and undefined."
+
+`undefined` means a variable has been declared but not yet assigned a value, or a function did not explicitly return anything. `null` is an explicit, deliberate "no value" assigned by a developer.
+
+```javascript
+let a;
+console.log(a); // undefined -- declared, never assigned
+
+function doNothing() {}
+console.log(doNothing()); // undefined -- no explicit return
+
+let b = null; // deliberately set to "no value"
+```
+
+## "What will this code output, and why?" (Event loop question)
+
+```javascript
+console.log("1");
+setTimeout(() => console.log("2"), 0);
+Promise.resolve().then(() => console.log("3"));
+console.log("4");
+
+// Output: 1, 4, 3, 2
+```
+
+A strong answer walks through the reasoning: synchronous code (`1`, `4`) runs first; the microtask queue (the Promise's `.then`) drains completely before the next macrotask; `setTimeout`'s callback is a macrotask and runs last, even with a zero delay.
+
+## "How does prototypal inheritance work?"
+
+Every JavaScript object has an internal link to another object, its prototype, and property lookups walk up this prototype chain until a match is found or the chain ends at `null`.
+
+```javascript
+const animal = {
+  speak() {
+    return `${this.name} makes a sound.`;
+  },
+};
+
+const dog = Object.create(animal);
+dog.name = "Rex";
+
+console.log(dog.speak()); // "Rex makes a sound." -- speak() found via the prototype chain
+```
+
+Classes in JavaScript (`class`/`extends`) are syntactic sugar over this same underlying prototype mechanism.
+
+## "What is the difference between call, apply, and bind?"
+
+All three explicitly set what `this` refers to inside a function, but they differ in how arguments are passed and whether the function is invoked immediately:
+
+```javascript
+function greet(greeting) {
+  return `${greeting}, ${this.name}`;
+}
+
+const person = { name: "Ada" };
+
+console.log(greet.call(person, "Hello"));      // invokes immediately, args listed individually
+console.log(greet.apply(person, ["Hello"]));   // invokes immediately, args as an array
+const boundGreet = greet.bind(person, "Hello"); // returns a new function, doesn't invoke yet
+console.log(boundGreet());
+```
+
+## "What are the differences between var, let, and const?"
+
+```text
+var:   function-scoped, hoisted with `undefined`, can be redeclared
+let:   block-scoped, hoisted into a temporal dead zone, can be reassigned
+const: block-scoped, hoisted into a temporal dead zone, cannot be reassigned
+       (though objects/arrays assigned to a const can still be mutated internally)
+```
+
+```javascript
+const arr = [1, 2, 3];
+arr.push(4);      // fine -- mutating the array's contents, not reassigning arr
+arr = [5, 6, 7];  // TypeError -- reassignment of a const binding
+```
+
+## Best Practices for the Interview Itself
+
+- Explain your reasoning out loud, even for "quiz-style" conceptual questions — interviewers care about your thought process, not just the final answer.
+- Whenever possible, tie an answer back to a short, concrete code example rather than a purely abstract definition.
+- If you are unsure, say so explicitly and explain how you would find out, rather than guessing confidently and being wrong.
+- Practice predicting the output of small, tricky snippets (especially around the event loop and equality operators) since these come up constantly.
+
+## Common Mistakes to Avoid
+
+- Memorizing a rigid definition without understanding it well enough to adapt when the interviewer asks a follow-up or a slightly different variation.
+- Rushing to answer without reading a code snippet carefully, missing a subtle detail like a zero-delay `setTimeout` or a loose equality comparison.
+- Treating conceptual questions as separate from practical coding ability — interviewers often connect the two directly in follow-up questions.
+- Forgetting to mention trade-offs (like why `===` is generally preferred over `==`) when a question has a nuanced, "it depends" answer.
+
+## "What Is the Difference Between == and ===?"
+
+This question tests whether you understand JavaScript's type coercion rules, not just whether you know to "always use `===`." The strict equality operator `===` compares both value and type with no conversion, while `==` first coerces operands to a common type if they differ, following a specific and occasionally surprising set of rules:
+
+```javascript
+console.log(1 == "1");        // true  -- string coerced to number
+console.log(0 == false);      // true  -- boolean coerced to number
+console.log(null == undefined); // true -- special case in the spec
+console.log(null == 0);       // false -- null only loosely equals undefined
+console.log("" == 0);         // true  -- both coerce to 0
+```
+
+A strong answer explains not just that `===` avoids coercion, but that `==`'s coercion rules are genuinely inconsistent enough to cause real bugs — notice that `null == undefined` is true but `null == 0` is false, which is not always intuitive from first principles and has to be learned as a specific rule. The practical guidance nearly every style guide and linter enforces is to default to `===` everywhere, and only reach for `==` in the rare, deliberate case where you specifically want `null`/`undefined` treated as equivalent (and even then, an explicit `value == null` check is usually clearer written out than relying on implicit coercion elsewhere in a codebase).
+
+## Conclusion
+
+These questions recur because they each test a real, foundational piece of how JavaScript actually works — not just trivia. Understanding the reasoning behind each answer, and being able to demonstrate it with a small code example, will serve you far better than memorizing any specific phrasing, since interviewers frequently vary these questions in ways that punish rote memorization.

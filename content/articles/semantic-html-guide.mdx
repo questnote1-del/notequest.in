@@ -1,0 +1,200 @@
+---
+title: "Semantic HTML: A Practical Guide"
+description: "Learn why semantic HTML matters and how to use elements like header, nav, main, article, and section correctly to improve accessibility, SEO, and code clarity."
+category: html
+tags: ["html", "semantic-html", "accessibility", "seo"]
+author: notequest-team
+publishedAt: "2025-02-25"
+updatedAt: "2025-04-27"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is semantic HTML?"
+    answer: "Semantic HTML means choosing elements based on the meaning of the content they contain, such as using nav for navigation links or article for self-contained content, instead of using generic div and span elements everywhere."
+  - question: "Does semantic HTML actually improve SEO?"
+    answer: "Yes, indirectly. Search engines use semantic structure to better understand the hierarchy and purpose of content on a page, which can improve how your content is indexed and displayed in search results."
+  - question: "What is the difference between article and section?"
+    answer: "article represents self-contained content that could stand alone, like a blog post or news story, while section groups related content within a page or article, typically under its own heading, without necessarily being independently distributable."
+  - question: "Why does semantic HTML matter for accessibility?"
+    answer: "Screen readers and other assistive technology rely on semantic elements and ARIA roles to announce the structure and purpose of a page, letting users navigate by landmarks like headers, navigation, and main content instead of reading everything linearly."
+references:
+  - title: "MDN — HTML elements reference"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element"
+  - title: "MDN — Semantics in HTML"
+    url: "https://developer.mozilla.org/en-US/docs/Glossary/Semantics"
+  - title: "W3C WAI — HTML: A good basis for accessibility"
+    url: "https://www.w3.org/WAI/tutorials/page-structure/"
+---
+
+## Introduction
+
+It is entirely possible to build a webpage using nothing but `<div>` and `<span>` tags, styled to look exactly like a properly structured page. But "looking right" and "being right" are different things — semantic HTML uses elements that describe what the content actually *is*, not just how it should appear, and that distinction has real consequences for accessibility, SEO, and maintainability.
+
+## Why Semantics Matter
+
+A `<div>` tells a browser (and any assistive technology) absolutely nothing about its content. A `<nav>`, `<button>`, or `<article>` tells the browser exactly what role that content plays. Screen readers use these semantic cues to build a navigable outline of a page, search engines use them to weigh the relative importance of content, and developers use them to understand a page's structure at a glance, without reading every class name.
+
+```html
+<!-- Says nothing about structure or purpose -->
+<div class="header">
+  <div class="nav">
+    <div class="nav-item">Home</div>
+  </div>
+</div>
+
+<!-- Describes exactly what each part is -->
+<header>
+  <nav>
+    <a href="/">Home</a>
+  </nav>
+</header>
+```
+
+## The Core Layout Elements
+
+Modern HTML provides dedicated elements for the major structural regions of a typical page:
+
+```html
+<body>
+  <header>
+    <h1>My Blog</h1>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+
+  <main>
+    <article>
+      <h2>Understanding Semantic HTML</h2>
+      <section>
+        <h3>Why It Matters</h3>
+        <p>...</p>
+      </section>
+    </article>
+
+    <aside>
+      <h3>Related Posts</h3>
+      <ul><li><a href="/post-2">Another Post</a></li></ul>
+    </aside>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 My Blog</p>
+  </footer>
+</body>
+```
+
+Each element here has an implicit ARIA "landmark role" — `<header>` behaves like `role="banner"`, `<nav>` like `role="navigation"`, `<main>` like `role="main"`, and `<footer>` like `role="contentinfo"` — which screen reader users can jump between directly, without reading the page top to bottom.
+
+## article vs section vs div
+
+These three elements are the most frequently confused, so it helps to have a clear rule for each:
+
+- **`<article>`** — self-contained content that would make sense on its own, even if syndicated elsewhere: a blog post, a news story, a product card, a single comment.
+- **`<section>`** — a thematic grouping of content, usually with its own heading, that is part of a larger document rather than standalone.
+- **`<div>`** — a generic container with no semantic meaning at all, used purely for styling or scripting hooks when no semantic element fits.
+
+```html
+<article>
+  <h2>10 Tips for Learning JavaScript</h2>
+  <section>
+    <h3>1. Practice Daily</h3>
+    <p>...</p>
+  </section>
+  <section>
+    <h3>2. Build Real Projects</h3>
+    <p>...</p>
+  </section>
+</article>
+```
+
+## Headings Form an Outline
+
+Heading levels (`<h1>` through `<h6>`) should describe a logical outline of the page, not be chosen based on font size:
+
+```html
+<h1>Article Title</h1>
+  <h2>Introduction</h2>
+  <h2>Core Concepts</h2>
+    <h3>Sub-topic A</h3>
+    <h3>Sub-topic B</h3>
+  <h2>Conclusion</h2>
+```
+
+Skipping levels (jumping from `<h1>` straight to `<h4>`) or using headings purely to make text bold breaks this outline for screen reader users, who often navigate a page heading-by-heading.
+
+## Buttons and Links: Use the Right Element
+
+A remarkably common mistake is using a `<div>` or `<span>` with a click handler where a native `<button>` or `<a>` should be used:
+
+```html
+<!-- Inaccessible: no keyboard support, no role announced -->
+<div onclick="submitForm()">Submit</div>
+
+<!-- Accessible by default: focusable, announced as a button, Enter/Space work -->
+<button type="submit">Submit</button>
+```
+
+Native interactive elements come with keyboard support, focus styles, and correct semantics for free. Recreating all of that with ARIA attributes on a `<div>` is possible but almost always more work and more error-prone than just using the right element.
+
+## figure and figcaption for Media
+
+```html
+<figure>
+  <img src="chart.png" alt="Bar chart showing quarterly revenue growth" />
+  <figcaption>Quarterly revenue grew 12% year over year.</figcaption>
+</figure>
+```
+
+## time for Dates
+
+```html
+<p>Published on <time datetime="2026-03-14">March 14, 2026</time>.</p>
+```
+
+The machine-readable `datetime` attribute lets browsers, search engines, and calendar integrations understand the exact date, even if the visible text is formatted differently.
+
+## Best Practices
+
+- Choose elements based on meaning first, and style them with CSS afterward — never pick an element because of its default appearance.
+- Use exactly one `<h1>` per page (or per `<article>` in some patterns) and keep heading levels sequential.
+- Prefer native interactive elements (`<button>`, `<a>`, `<input>`) over recreating their behavior with generic elements and JavaScript.
+- Use landmark elements (`<header>`, `<nav>`, `<main>`, `<footer>`) once per page for their primary purpose, rather than scattering many of the same landmark throughout.
+- Always provide meaningful `alt` text for images that convey information, and empty `alt=""` for purely decorative images.
+
+## Common Mistakes to Avoid
+
+- Wrapping every piece of content in `<div>`, even when a semantic alternative exists.
+- Using heading tags purely for visual size rather than to reflect the actual document outline.
+- Making custom clickable "buttons" out of `<div>` or `<span>` elements without keyboard support or proper roles.
+- Nesting interactive elements, such as a `<button>` inside an `<a>`, which is invalid HTML and confuses assistive technology.
+
+## Landmark Elements and Screen Reader Navigation
+
+Semantic elements like `<header>`, `<nav>`, `<main>`, and `<footer>` do more than tidy up your markup — they create ARIA landmarks that screen reader users rely on to jump directly between sections of a page, the same way a sighted user might visually scan for the navigation bar or main content area:
+
+```html
+<body>
+  <header><nav>...</nav></header>
+  <main>
+    <h1>Article Title</h1>
+    <article>...</article>
+  </main>
+  <footer>...</footer>
+</body>
+```
+
+A screen reader user can open a "landmarks" menu (most screen readers support this) and jump straight to `<main>`, skipping repeated header and navigation content entirely on every single page of a site — this is the semantic equivalent of a visually-hidden "skip to main content" link, except it works automatically without any extra markup. Using a generic `<div>` for these same regions provides none of this structure; a screen reader has no way to know that a particular `<div>` represents "the main content" versus "a sidebar" versus "a footer," since a `<div>` carries no semantic meaning at all. This is one of the clearest, lowest-effort wins semantic HTML provides: correct element choice, with zero additional code, directly improves navigation for an entire category of users.
+
+It's worth noting that these landmarks only help if there is exactly one of each per page in most cases — a document with three separate `<main>` elements gives assistive technology conflicting information about where "the main content" actually is. When a page genuinely needs multiple similar regions, such as two `<nav>` elements (a primary navigation and a footer navigation), giving each a distinct `aria-label` lets a screen reader announce which is which, rather than presenting two unlabeled, identically-named landmarks.
+
+Search engines benefit from the same structure for a related but distinct reason: semantic elements give crawlers explicit signals about which content is the primary subject of a page versus supporting navigation or boilerplate, which can influence how content is indexed and how snippets are generated for search results. This is a modest but genuinely free side benefit of markup decisions you would want to make anyway for accessibility reasons.
+
+A quick way to audit an existing page is to open the browser's accessibility tree inspector and check whether it reflects the actual structure of the content — a page built entirely from generic `<div>` elements will show a flat, undifferentiated tree with no landmarks at all, which is a strong signal that a pass of semantic cleanup would meaningfully improve how the page is perceived by assistive technology.
+
+## Conclusion
+
+Semantic HTML costs nothing extra to write once you know the vocabulary — it is simply choosing `<nav>` instead of `<div class="nav">`, or `<button>` instead of a clickable `<span>`. In exchange, you get better accessibility, clearer code for the next developer, and small but real SEO benefits, all from decisions you were going to make anyway.

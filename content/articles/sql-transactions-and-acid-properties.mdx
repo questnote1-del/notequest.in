@@ -1,0 +1,166 @@
+---
+title: "SQL Transactions and ACID Properties"
+description: "Understand SQL transactions and the ACID properties — atomicity, consistency, isolation, and durability — with practical examples of commit, rollback, and is..."
+category: sql
+tags: ["sql", "transactions", "acid", "database"]
+author: arjun-mehta
+publishedAt: "2025-02-07"
+updatedAt: "2025-04-02"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What does ACID stand for?"
+    answer: "ACID stands for Atomicity, Consistency, Isolation, and Durability — four properties that guarantee a database transaction behaves reliably even in the presence of errors, concurrent access, or crashes."
+  - question: "What happens if a transaction is not committed?"
+    answer: "Any changes made within an uncommitted transaction are not visible to other connections and can be undone with ROLLBACK. If the connection closes without committing, most databases automatically roll back the pending changes."
+  - question: "What is a dirty read?"
+    answer: "A dirty read happens when one transaction reads data that another transaction has changed but not yet committed. If the second transaction rolls back, the first transaction acted on data that never truly existed."
+  - question: "Which isolation level should I use by default?"
+    answer: "Most databases default to READ COMMITTED, which is a reasonable balance between consistency and performance for typical applications. Stricter levels like SERIALIZABLE offer stronger guarantees but usually add measurable performance overhead."
+references:
+  - title: "PostgreSQL Docs — Transactions"
+    url: "https://www.postgresql.org/docs/current/tutorial-transactions.html"
+  - title: "PostgreSQL Docs — Transaction Isolation"
+    url: "https://www.postgresql.org/docs/current/transaction-iso.html"
+  - title: "MDN — SQL glossary: Transaction"
+    url: "https://developer.mozilla.org/en-US/docs/Glossary/Transaction"
+---
+
+## Introduction
+
+Imagine transferring money between two bank accounts: subtract from one, add to the other. If the server crashes after the subtraction but before the addition, the money simply disappears. Transactions exist to prevent exactly this kind of partial, inconsistent update. This guide covers how SQL transactions work and the four ACID properties that describe the guarantees they provide.
+
+## What Is a Transaction?
+
+A transaction groups multiple SQL statements into a single, indivisible unit of work: either all of them succeed and are saved (`COMMIT`), or none of them are, and the database is left exactly as it was before (`ROLLBACK`).
+
+```sql
+BEGIN;
+
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+
+COMMIT;
+```
+
+If anything goes wrong between `BEGIN` and `COMMIT` — a constraint violation, a crash, an explicit error check in application code — you can issue `ROLLBACK` instead, and neither update takes effect:
+
+```sql
+BEGIN;
+
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+-- suppose this check fails in application code:
+-- SELECT balance FROM accounts WHERE id = 1; -- balance went negative!
+
+ROLLBACK; -- undo the first update entirely
+```
+
+## Atomicity: All or Nothing
+
+Atomicity guarantees that a transaction's statements are treated as a single unit — there is no partial state where only some of the statements have taken effect from any other connection's point of view. Either the entire transfer happens, or none of it does.
+
+## Consistency: Valid State to Valid State
+
+Consistency means a transaction can only bring the database from one valid state to another valid state, respecting all defined constraints, triggers, and cascading rules. If a transaction would violate a foreign key constraint or a check constraint, the database refuses to commit it.
+
+```sql
+ALTER TABLE accounts ADD CONSTRAINT balance_non_negative CHECK (balance >= 0);
+
+BEGIN;
+UPDATE accounts SET balance = balance - 1000 WHERE id = 1; -- would go negative
+COMMIT; -- fails: violates balance_non_negative constraint, transaction rolled back
+```
+
+## Isolation: Concurrent Transactions Don't Interfere
+
+Isolation determines how much one transaction can "see" of another transaction's uncommitted changes. Different isolation levels make different trade-offs between consistency and performance:
+
+```sql
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;   -- default in many databases
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;      -- strictest
+```
+
+- **Read Uncommitted** — can see other transactions' uncommitted changes (a "dirty read"); rarely used.
+- **Read Committed** — only sees data that has been committed at the moment each statement runs; the most common default.
+- **Repeatable Read** — guarantees the same query returns the same rows throughout the whole transaction.
+- **Serializable** — the strictest level, behaving as if transactions ran one at a time, at the cost of more locking or retries.
+
+## Durability: Committed Means Permanent
+
+Once a transaction commits, its changes must survive even a crash immediately afterward. Databases achieve this by writing changes to a durable write-ahead log before acknowledging the commit, so the data can be recovered even if the server loses power a moment later.
+
+## A Realistic Transaction Example
+
+```sql
+BEGIN;
+
+INSERT INTO orders (customer_id, total) VALUES (42, 150.00) RETURNING id;
+-- suppose this returns order id 501
+
+INSERT INTO order_items (order_id, product_id, qty) VALUES (501, 7, 2);
+UPDATE inventory SET stock = stock - 2 WHERE product_id = 7;
+
+COMMIT;
+```
+
+If the inventory update failed because stock would go negative, the entire order — including the already-inserted rows — rolls back together, leaving no partial order in the system.
+
+## Using Transactions from Application Code
+
+Most database drivers expose transaction control directly, often alongside connection pooling:
+
+```javascript
+const client = await pool.connect();
+try {
+  await client.query("BEGIN");
+  await client.query("UPDATE accounts SET balance = balance - $1 WHERE id = $2", [100, 1]);
+  await client.query("UPDATE accounts SET balance = balance + $1 WHERE id = $2", [100, 2]);
+  await client.query("COMMIT");
+} catch (err) {
+  await client.query("ROLLBACK");
+  throw err;
+} finally {
+  client.release();
+}
+```
+
+## Best Practices
+
+- Keep transactions as short as possible; long-running transactions hold locks longer and increase contention with other queries.
+- Always handle the rollback path explicitly in application code, so a failure mid-transaction cannot leave changes half-applied.
+- Choose the weakest isolation level that still meets your correctness requirements, since stricter levels typically cost performance.
+- Use database constraints (foreign keys, check constraints, unique constraints) to enforce consistency, rather than relying solely on application logic.
+- Test concurrent scenarios explicitly (two transactions touching the same row) rather than assuming defaults are always safe for your use case.
+
+## Common Mistakes to Avoid
+
+- Forgetting to commit a transaction, leaving changes invisible to other connections and eventually rolled back when the connection closes.
+- Wrapping unrelated operations into a single overly broad transaction, increasing lock contention unnecessarily.
+- Assuming the default isolation level prevents all anomalies — Read Committed still allows certain race conditions that Repeatable Read or Serializable would prevent.
+- Not handling errors inside application-level transaction code, leaving a transaction open indefinitely if an exception is thrown without a rollback.
+
+## Isolation Levels in Practice
+
+Isolation is the ACID property with the most nuance in real-world databases, because full serializable isolation — where transactions behave as if executed one at a time — is expensive, so most databases default to a weaker level that trades some theoretical guarantees for better concurrency. The SQL standard defines four levels, from weakest to strongest: Read Uncommitted, Read Committed, Repeatable Read, and Serializable:
+
+```sql
+BEGIN TRANSACTION;
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+
+SELECT balance FROM accounts WHERE id = 1; -- reads the same value all transaction long
+-- ... other logic ...
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+
+COMMIT;
+```
+
+Read Committed (the default in PostgreSQL and SQL Server) guarantees you never see uncommitted data from other transactions, but a value you read twice within the same transaction could change between reads if another transaction commits in between — a phenomenon called a non-repeatable read. Repeatable Read closes that gap by guaranteeing consistent reads for the duration of the transaction, but can still permit certain anomalies (like phantom rows appearing in a range query) that only Serializable fully eliminates. In practice, most applications run comfortably on Read Committed or Repeatable Read, reaching for Serializable only for the specific transactions — like transferring funds or reserving the last item in inventory — where a subtle concurrency anomaly could cause real financial or data-integrity damage.
+
+Stronger isolation levels are not free: Serializable transactions may need to abort and retry when the database detects a conflict it cannot safely resolve otherwise, which means application code using Serializable isolation needs to be written to expect and gracefully retry occasional transaction failures, rather than assuming every transaction succeeds on the first attempt. This retry-on-conflict behavior is a normal, expected part of working at the strictest isolation level, not a sign that something is broken.
+
+## Conclusion
+
+ACID properties are not an abstract academic concept — they are the concrete reason you can trust that a bank transfer, an order placement, or an inventory update either fully succeeds or leaves no trace of a partial failure. Understanding atomicity, consistency, isolation, and durability lets you reason confidently about what your database guarantees, and what you still need to handle yourself in application code.

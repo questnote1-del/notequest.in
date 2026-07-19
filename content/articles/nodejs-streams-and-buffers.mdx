@@ -1,0 +1,213 @@
+---
+title: "Node.js Streams and Buffers Explained"
+description: "Learn how Node.js streams and buffers work, including readable, writable, and transform streams, backpressure, and practical examples for handling large file..."
+category: nodejs
+tags: ["nodejs", "streams", "buffers", "performance"]
+author: arjun-mehta
+publishedAt: "2024-09-19"
+updatedAt: "2024-11-16"
+featured: false
+popular: true
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Why use streams instead of reading a whole file into memory?"
+    answer: "Streams process data in small chunks as it arrives, so a program can handle files or network payloads far larger than available memory, and can start producing output before the entire input has even finished loading."
+  - question: "What is a Buffer in Node.js?"
+    answer: "A Buffer is a fixed-size chunk of raw binary data allocated outside the V8 JavaScript heap, used to represent things like file contents or network packets before they are interpreted as text or another format."
+  - question: "What is backpressure in the context of streams?"
+    answer: "Backpressure happens when a writable stream cannot process incoming data as fast as a readable stream produces it. Node signals this so the readable side can pause, preventing memory from being overwhelmed by a growing internal buffer."
+  - question: "What is a Transform stream?"
+    answer: "A Transform stream is both readable and writable, and it modifies data as it passes through, such as compressing, encrypting, or parsing chunks on the fly, making it ideal for building processing pipelines."
+references:
+  - title: "Node.js Docs — Stream"
+    url: "https://nodejs.org/api/stream.html"
+  - title: "Node.js Docs — Buffer"
+    url: "https://nodejs.org/api/buffer.html"
+  - title: "Node.js Guide — Backpressuring in Streams"
+    url: "https://nodejs.org/en/learn/modules/backpressuring-in-streams"
+---
+
+## Introduction
+
+Node.js was built from the start around non-blocking I/O, and streams are the abstraction that makes handling large amounts of data efficient without exhausting memory. Instead of loading an entire file, HTTP response, or database result set into memory at once, streams let you work with data piece by piece as it becomes available. This guide explains buffers, the four stream types, and backpressure — the concept that ties them together.
+
+## Buffers: Raw Binary Data
+
+A `Buffer` represents a fixed-length sequence of bytes, used whenever Node deals with binary data — file contents, network packets, image data — before it is interpreted as a specific encoding like UTF-8 text.
+
+```javascript
+const buf = Buffer.from("Hello, Node!", "utf-8");
+console.log(buf);         // <Buffer 48 65 6c 6c 6f 2c 20 4e 6f 64 65 21>
+console.log(buf.toString()); // "Hello, Node!"
+console.log(buf.length);  // 12 (bytes, not characters, for multi-byte encodings)
+```
+
+Buffers are allocated outside the regular JavaScript heap, which is part of why Node can handle binary data efficiently without constantly triggering garbage collection pauses.
+
+## The Four Types of Streams
+
+Node models all streaming I/O with four base stream types:
+
+- **Readable** — a source of data you can read from (e.g., a file being read, an incoming HTTP request body).
+- **Writable** — a destination you can write data to (e.g., a file being written, an HTTP response).
+- **Duplex** — both readable and writable, independently (e.g., a TCP socket).
+- **Transform** — a duplex stream that modifies the data as it passes through (e.g., gzip compression).
+
+## Reading a File with a Readable Stream
+
+```javascript
+import fs from "fs";
+
+const readStream = fs.createReadStream("large-log.txt", { encoding: "utf-8" });
+
+readStream.on("data", (chunk) => {
+  console.log("Received chunk of size:", chunk.length);
+});
+
+readStream.on("end", () => {
+  console.log("Finished reading the file.");
+});
+
+readStream.on("error", (err) => {
+  console.error("Stream error:", err);
+});
+```
+
+Instead of loading the entire file with `fs.readFileSync`, this reads it in manageable chunks, keeping memory usage roughly constant regardless of file size.
+
+## Writing Data with a Writable Stream
+
+```javascript
+import fs from "fs";
+
+const writeStream = fs.createWriteStream("output.txt");
+
+writeStream.write("First line\n");
+writeStream.write("Second line\n");
+writeStream.end("Final line\n");
+
+writeStream.on("finish", () => console.log("All data has been written."));
+```
+
+## Piping: Connecting Streams Together
+
+`pipe()` connects a readable stream's output directly to a writable stream's input, automatically handling backpressure for you:
+
+```javascript
+import fs from "fs";
+import zlib from "zlib";
+
+fs.createReadStream("large-log.txt")
+  .pipe(zlib.createGzip())              // Transform stream
+  .pipe(fs.createWriteStream("large-log.txt.gz"));
+```
+
+This single pipeline reads the file in chunks, compresses each chunk, and writes the compressed output — all without ever holding the entire file in memory.
+
+## Understanding Backpressure
+
+If a writable destination is slower than the readable source (for example, writing to a slow disk while reading from a fast in-memory source), data would pile up in memory unless something signals the reader to slow down. This signal is backpressure.
+
+```javascript
+const canContinue = writeStream.write(chunk);
+if (!canContinue) {
+  // internal buffer is full — wait for 'drain' before writing more
+  readStream.pause();
+  writeStream.once("drain", () => readStream.resume());
+}
+```
+
+When using `pipe()`, Node handles this pause/resume dance automatically, which is one of the biggest reasons to prefer `pipe()` (or the newer `stream.pipeline()` and async iteration) over manually wiring `data` events to `write()` calls.
+
+## A Custom Transform Stream
+
+```javascript
+import { Transform } from "stream";
+
+class UppercaseTransform extends Transform {
+  _transform(chunk, encoding, callback) {
+    this.push(chunk.toString().toUpperCase());
+    callback();
+  }
+}
+
+process.stdin.pipe(new UppercaseTransform()).pipe(process.stdout);
+```
+
+## Using stream.pipeline() for Safer Piping
+
+Manual `.pipe()` chains do not automatically clean up if one stream errors partway through, which can leave file descriptors open. `pipeline()` handles that cleanup for you:
+
+```javascript
+import { pipeline } from "stream/promises";
+import fs from "fs";
+import zlib from "zlib";
+
+await pipeline(
+  fs.createReadStream("large-log.txt"),
+  zlib.createGzip(),
+  fs.createWriteStream("large-log.txt.gz")
+);
+console.log("Pipeline succeeded.");
+```
+
+## Best Practices
+
+- Prefer streams over loading entire files or responses into memory when working with large or unbounded data.
+- Use `pipeline()` instead of chained `.pipe()` calls to get automatic error propagation and cleanup.
+- Always attach an `error` listener to streams; an unhandled stream error can crash the process.
+- Reach for Transform streams to build composable processing pipelines instead of buffering the full data set between steps.
+- Be mindful of encoding — reading a Buffer as UTF-8 text can split multi-byte characters across chunk boundaries if you process raw buffers manually instead of a text-aware stream.
+
+## Common Mistakes to Avoid
+
+- Reading large files with `fs.readFileSync` when a streaming approach would use a fraction of the memory.
+- Manually forwarding `data` events to a writable stream without checking the return value of `write()`, ignoring backpressure entirely.
+- Forgetting to handle the `error` event on every stream in a chain, not just the first one.
+- Assuming a chunk boundary aligns with a logical boundary (a line, a JSON object) — chunks can split in the middle of any structure and must be handled accordingly.
+
+## Consuming Streams with Async Iteration
+
+Modern Node.js lets you consume a readable stream with a plain `for await...of` loop, which often reads more naturally than wiring up `data` and `end` event listeners by hand:
+
+```javascript
+import fs from "fs";
+
+async function countLines(filePath) {
+  const stream = fs.createReadStream(filePath, { encoding: "utf-8" });
+  let lineCount = 0;
+  let leftover = "";
+
+  for await (const chunk of stream) {
+    const text = leftover + chunk;
+    const lines = text.split("\n");
+    leftover = lines.pop(); // last piece might be incomplete, save it for the next chunk
+    lineCount += lines.length;
+  }
+
+  if (leftover.length > 0) lineCount++;
+  return lineCount;
+}
+```
+
+This approach still processes the file incrementally, chunk by chunk, with the same constant memory footprint as the event-based version — it is purely a more ergonomic way to write the consuming code, using `await` and a loop instead of nested callbacks. It composes especially well with `async`/`await`-based code elsewhere in your application, since you can `await` a stream directly inside another async function without switching styles halfway through.
+
+## Piping Streams Together
+
+Individual streams become genuinely powerful when chained together with `.pipe()`, which automatically handles data flow and backpressure between a readable source, any number of transform steps, and a writable destination:
+
+```javascript
+import { createReadStream, createWriteStream } from "node:fs";
+import { createGzip } from "node:zlib";
+
+createReadStream("access.log")
+  .pipe(createGzip())
+  .pipe(createWriteStream("access.log.gz"));
+```
+
+This single pipeline reads the log file in small chunks, compresses each chunk as it arrives, and writes the compressed output to disk — all without ever holding the full uncompressed or compressed file in memory at once, and all while `pipe` automatically pauses the readable stream if the writable destination falls behind. For pipelines with more than two or three stages, or where you need proper error propagation across every stage (a limitation of chained `.pipe()` calls, since an error on one stream does not automatically destroy the others), Node's `stream.pipeline()` function is the recommended modern alternative — it takes the same streams, handles cleanup and error forwarding correctly across the whole chain, and returns a Promise you can `await` or catch a single error from, rather than needing to attach an `"error"` listener to every individual stream in the chain.
+
+## Conclusion
+
+Streams are what let Node.js handle gigabyte-sized files and high-throughput network traffic with modest memory usage. Once you are comfortable with readable, writable, duplex, and transform streams — and understand why backpressure exists — you can build data pipelines that scale far beyond what loading everything into memory would allow.

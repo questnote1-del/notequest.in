@@ -1,0 +1,161 @@
+---
+title: "Process vs Thread Explained"
+description: "Understand the difference between processes and threads in operating systems, including memory isolation, context switching, and when to use multiprocessing..."
+category: operating-systems
+tags: ["operating-systems", "process", "thread", "concurrency"]
+author: neha-patel
+publishedAt: "2026-01-28"
+updatedAt: "2026-04-12"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the main difference between a process and a thread?"
+    answer: "A process has its own isolated memory space and runs independently, while a thread is a unit of execution within a process that shares the same memory space with other threads in that process, making communication between threads faster but riskier."
+  - question: "Why is context switching between threads generally faster than between processes?"
+    answer: "Switching between threads within the same process only needs to save and restore CPU registers and the stack, since the memory space and most resources are shared, while switching between processes also requires swapping the entire memory mapping, which is more expensive."
+  - question: "Why does JavaScript in the browser use a single main thread?"
+    answer: "JavaScript was designed around a single-threaded execution model to avoid the complexity and bugs that come with shared-memory concurrency, relying instead on asynchronous callbacks and the event loop to remain responsive without needing traditional multithreading for most tasks."
+  - question: "What is a race condition?"
+    answer: "A race condition occurs when multiple threads access and modify shared data concurrently without proper synchronization, causing the final result to depend unpredictably on the exact timing of each thread's execution."
+references:
+  - title: "MDN — Thread glossary"
+    url: "https://developer.mozilla.org/en-US/docs/Glossary/Thread"
+  - title: "MDN — Using Web Workers"
+    url: "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers"
+  - title: "Node.js Docs — Worker threads"
+    url: "https://nodejs.org/api/worker_threads.html"
+---
+
+## Introduction
+
+"Process" and "thread" get used almost interchangeably in casual conversation, but they describe genuinely different units of execution with very different trade-offs around memory, safety, and performance. Understanding the difference clearly is essential for reasoning about concurrency, whether you are configuring a Node.js cluster, debugging a multithreaded desktop application, or just trying to make sense of your operating system's task manager.
+
+## What Is a Process?
+
+A process is an independent, running instance of a program, with its own isolated memory space, its own set of file handles, and its own view of system resources. When you open two separate browser windows (as separate processes, depending on the browser's architecture), one crashing generally does not bring down the other, because their memory spaces are completely separate.
+
+```text
+Process A                    Process B
++-------------------+       +-------------------+
+| Code               |       | Code               |
+| Data               |       | Data               |
+| Heap                |       | Heap                |
+| Stack               |       | Stack               |
++-------------------+       +-------------------+
+      (isolated memory, no direct sharing)
+```
+
+Creating a new process is relatively expensive: the operating system must allocate a fresh memory space and set up all the bookkeeping structures the process needs, which takes measurably longer than creating a thread.
+
+## What Is a Thread?
+
+A thread is a unit of execution *within* a process. A single process can have multiple threads, and all of them share the same memory space — the same heap, the same global variables, the same open file handles:
+
+```text
+Process A
++----------------------------------------+
+| Shared: Code, Data, Heap, File Handles  |
+|                                          |
+|  Thread 1        Thread 2      Thread 3  |
+|  (own stack)     (own stack)   (own stack)|
++----------------------------------------+
+```
+
+Each thread has its own execution stack and program counter, but everything else in the process is shared and directly accessible by every thread — which is exactly what makes threads both faster to create and more dangerous to coordinate than separate processes.
+
+## Memory Isolation: The Key Trade-off
+
+Because processes have isolated memory, one process cannot accidentally corrupt another process's data — if it crashes, the damage is contained. Threads within the same process have no such protection: one thread writing to shared memory incorrectly can corrupt data another thread depends on, and a crash in one thread can bring down the entire process, including every other thread inside it.
+
+## Context Switching Cost
+
+Switching the CPU from running one process to running another (or one thread to another) is called a context switch, and it is not free — the CPU must save the current state and load the new one.
+
+```text
+Thread-to-thread switch (same process): save/restore registers and stack pointer only
+                                          -> relatively cheap
+
+Process-to-process switch: save/restore registers, stack pointer,
+                             AND swap the entire memory mapping
+                             -> relatively expensive
+```
+
+This is a major reason multithreading is often chosen over multiprocessing when tasks need to communicate frequently and switch rapidly: the overhead per switch is meaningfully lower.
+
+## Communication Between Processes vs Threads
+
+```text
+Threads:   communicate directly through shared memory (fast, but requires
+           careful synchronization to avoid race conditions)
+
+Processes: communicate through explicit mechanisms like pipes, sockets,
+           or shared memory segments set up deliberately by the OS
+           (slower, but naturally isolated and safer by default)
+```
+
+```javascript
+// Node.js: separate processes communicate explicitly via message passing
+const { fork } = require("child_process");
+const child = fork("worker.js");
+
+child.send({ task: "process-data" });
+child.on("message", (result) => console.log("Received:", result));
+```
+
+## Race Conditions: The Cost of Shared Memory
+
+```javascript
+// Two threads incrementing a shared counter without synchronization
+let counter = 0;
+
+function increment() {
+  const temp = counter; // read
+  counter = temp + 1;    // write
+}
+
+// If two threads both read `counter` as 5 before either writes back,
+// both compute 6, and one increment is silently lost.
+```
+
+This is a race condition: the final value depends on the unpredictable timing of when each thread reads and writes the shared variable. Fixing it requires synchronization primitives like locks, mutexes, or atomic operations, which add complexity and can introduce their own problems, like deadlocks, if used incorrectly.
+
+## Why JavaScript's Single-Threaded Model Avoids This
+
+JavaScript's main thread runs one piece of code at a time, using the event loop and asynchronous callbacks instead of true multithreading for most concurrency needs — which is precisely why classic race conditions on shared variables are far less common in typical JavaScript code than in languages built around threads from the start. When JavaScript environments do need parallel execution (heavy computation that would block the main thread), they reach for Web Workers (in browsers) or worker threads (in Node.js) — which run as genuinely separate execution contexts with their own memory, communicating via message passing rather than shared memory, avoiding classic thread-based race conditions entirely.
+
+## Choosing Between Multiprocessing and Multithreading
+
+- **Use multiple processes** when tasks are largely independent, isolation/fault tolerance matters, or you want to use multiple CPU cores for genuinely parallel, CPU-bound work (e.g., a Node.js cluster of worker processes).
+- **Use multiple threads** when tasks need to share data frequently and communicate with low overhead, and you can properly synchronize access to that shared data.
+
+## Best Practices
+
+- Prefer message-passing (between processes or workers) over shared mutable state when correctness matters more than raw throughput.
+- Keep the amount of shared, mutable state between threads as small and well-synchronized as possible.
+- Use dedicated worker processes/threads for CPU-intensive work so it does not block a single main thread responsible for handling other requests or UI updates.
+- Understand your specific runtime's concurrency model (Node's single-threaded event loop plus worker threads, versus a traditional multithreaded language) before assuming general threading advice applies directly.
+
+## Common Mistakes to Avoid
+
+- Assuming multithreading is always faster than multiprocessing — for CPU-bound, independent work with minimal communication, processes can be just as effective and safer.
+- Sharing mutable state across threads without proper synchronization, leading to intermittent, hard-to-reproduce race condition bugs.
+- Forgetting that a crash in one thread can take down the entire process, unlike an isolated process crash which does not directly affect siblings.
+- Overusing heavyweight processes for lightweight, frequently-communicating tasks, incurring unnecessary context-switching and communication overhead.
+
+## Context Switching: The Hidden Cost
+
+Both processes and threads rely on the operating system's scheduler rapidly switching the CPU between different units of work to create the illusion of parallelism on a machine with fewer cores than running tasks. Each switch, called a context switch, has real overhead: the OS must save the current task's registers, program counter, and other state, then load the next task's saved state before it can resume:
+
+```text
+Time slice 1: [ Process A running ] -> context switch (save A, load B)
+Time slice 2: [ Process B running ] -> context switch (save B, load A)
+Time slice 3: [ Process A running ] -> ...
+```
+
+Switching between threads within the same process is generally cheaper than switching between separate processes, because threads already share the same memory space and many of the same OS-level resources — only the thread-specific state (registers, stack pointer) needs saving and restoring, whereas a process switch may also involve changing memory mappings and flushing certain CPU caches that were tuned for the previous process's memory layout. This overhead is exactly why an application that spawns thousands of threads (or processes) to handle concurrent work can paradoxically become slower than one handling far fewer concurrent units — beyond a certain point, the CPU spends a growing share of its time context-switching between tasks rather than doing useful work for any of them, which is one of the underlying reasons thread pools and async I/O models (like Node.js's event loop) exist as alternatives to naively spinning up a new thread per task.
+
+## Conclusion
+
+Processes and threads represent two different answers to "how do we run more than one thing at once": strong isolation with higher overhead, or shared memory with higher risk and lower overhead. Neither is universally better — the right choice depends on how much isolation your tasks need and how much they need to communicate, and most real systems end up using both at different levels of their architecture.

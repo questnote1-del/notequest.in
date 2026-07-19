@@ -1,0 +1,266 @@
+---
+title: "React Hooks: A Complete Guide for Beginners"
+description: "A beginner-friendly tour of React's built-in hooks, including useState, useEffect, useContext, useRef, and useMemo, with practical examples for each one."
+category: react
+tags: ["react", "hooks", "usestate", "usecontext", "beginners"]
+author: priya-sharma
+publishedAt: "2024-05-18"
+updatedAt: "2024-07-26"
+featured: false
+popular: true
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Why can't hooks be called conditionally?"
+    answer: "React tracks hooks by the order they are called on every render, so calling a hook inside an if statement or loop would shift that order between renders and corrupt each hook's internal state."
+  - question: "What is the difference between useState and useRef?"
+    answer: "Updating state with useState triggers a re-render, while updating a ref with useRef does not. Refs are meant for values that need to persist between renders but should not cause the component to re-render when changed."
+  - question: "When should I use useMemo?"
+    answer: "Use useMemo when a calculation is genuinely expensive and you want to avoid repeating it on every render, or when you need to preserve a stable object or array reference for a dependency array or memoized child component."
+  - question: "Can I write my own hooks?"
+    answer: "Yes. Any function whose name starts with 'use' and that calls other hooks internally is a custom hook, and it is one of the best ways to share stateful logic between components without prop drilling."
+references:
+  - title: "React Docs — Hooks Reference"
+    url: "https://react.dev/reference/react"
+  - title: "React Docs — Rules of Hooks"
+    url: "https://react.dev/warnings/invalid-hook-call-warning"
+  - title: "React Docs — Reusing Logic with Custom Hooks"
+    url: "https://react.dev/learn/reusing-logic-with-custom-hooks"
+---
+
+## Introduction
+
+Hooks let function components hold state, respond to lifecycle events, and reuse stateful logic — capabilities that used to require class components. Since their introduction, hooks have become the default way to write React, and understanding the core set (`useState`, `useEffect`, `useContext`, `useRef`, `useMemo`, and `useCallback`) covers the vast majority of real-world component code.
+
+## useState: Component-Local State
+
+```javascript
+import { useState } from "react";
+
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <button onClick={() => setCount(count + 1)}>
+      Clicked {count} times
+    </button>
+  );
+}
+```
+
+`useState` returns a pair: the current value and a setter function. Calling the setter schedules a re-render with the new value. When the next state depends on the previous one, pass a function instead of a value to avoid stale-state bugs:
+
+```javascript
+setCount((prev) => prev + 1);
+```
+
+## useEffect: Synchronizing with the Outside World
+
+```javascript
+import { useEffect, useState } from "react";
+
+function OnlineStatus() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const update = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  return <p>{isOnline ? "Online" : "Offline"}</p>;
+}
+```
+
+## useContext: Avoiding Prop Drilling
+
+Context lets a value be read anywhere in the component tree below a provider, without passing it through every intermediate component as a prop.
+
+```javascript
+import { createContext, useContext } from "react";
+
+const ThemeContext = createContext("light");
+
+function ThemedButton() {
+  const theme = useContext(ThemeContext);
+  return <button className={theme}>Click me</button>;
+}
+
+function App() {
+  return (
+    <ThemeContext.Provider value="dark">
+      <ThemedButton />
+    </ThemeContext.Provider>
+  );
+}
+```
+
+## useRef: Persisting Values Without Re-rendering
+
+Refs hold a mutable value that survives across renders but does not trigger a re-render when it changes, which makes them ideal for DOM references or "instance variables":
+
+```javascript
+import { useRef } from "react";
+
+function TextInputWithFocusButton() {
+  const inputRef = useRef(null);
+
+  function focusInput() {
+    inputRef.current.focus();
+  }
+
+  return (
+    <>
+      <input ref={inputRef} type="text" />
+      <button onClick={focusInput}>Focus the input</button>
+    </>
+  );
+}
+```
+
+## useMemo and useCallback: Controlling Recalculation
+
+`useMemo` caches the result of a calculation between renders, recomputing only when its dependencies change. `useCallback` does the same thing for function references specifically.
+
+```javascript
+import { useMemo, useCallback } from "react";
+
+function ProductList({ products, query }) {
+  const filtered = useMemo(
+    () => products.filter((p) => p.name.includes(query)),
+    [products, query]
+  );
+
+  const handleSelect = useCallback((id) => {
+    console.log("Selected product:", id);
+  }, []);
+
+  return filtered.map((p) => (
+    <button key={p.id} onClick={() => handleSelect(p.id)}>
+      {p.name}
+    </button>
+  ));
+}
+```
+
+These two hooks are optimizations, not correctness tools — reach for them when profiling actually shows a performance problem, not by default on every value.
+
+## The Rules of Hooks
+
+React relies on hooks being called in the exact same order on every render, which is why two rules exist:
+
+1. Only call hooks at the top level of a component or another hook — never inside conditions, loops, or nested functions.
+2. Only call hooks from React function components or custom hooks, never from regular JavaScript functions.
+
+```javascript
+// Wrong: conditional hook call
+if (isLoggedIn) {
+  const [user, setUser] = useState(null); // breaks hook order
+}
+
+// Right: call the hook unconditionally, branch inside
+const [user, setUser] = useState(null);
+if (isLoggedIn) {
+  // use user here
+}
+```
+
+## Writing a Custom Hook
+
+Custom hooks are ordinary functions that call other hooks, letting you extract and reuse stateful logic across components:
+
+```javascript
+function useLocalStorage(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : initialValue;
+  });
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  return [value, setValue];
+}
+```
+
+## Best Practices
+
+- Keep each `useState` call focused on one piece of independent state rather than one giant state object for everything.
+- Extract repeated stateful logic into a custom hook instead of copy-pasting effects across components.
+- Only add `useMemo`/`useCallback` where profiling shows a real cost — they add complexity and are not free themselves.
+- Let the `eslint-plugin-react-hooks` rules guide your dependency arrays instead of guessing.
+- Prefer colocating related state and effects inside the component (or a custom hook) that actually owns them.
+
+## Common Mistakes to Avoid
+
+- Calling hooks conditionally or inside loops, which breaks React's ability to track hook state correctly.
+- Overusing `useContext` for state that changes very frequently, which can cause unnecessary re-renders across the whole subtree.
+- Mutating a ref's `.current` value and expecting the UI to update — refs never trigger renders.
+- Reaching for `useMemo` everywhere "just in case," which adds cognitive overhead without measurable benefit in most components.
+
+## Combining Several Hooks in One Component
+
+Real components rarely use just one hook in isolation — they typically combine several to express a complete piece of behavior. A simple data-fetching component demonstrates this well:
+
+```javascript
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    fetch(\`/api/users/\${userId}\`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) {
+          setUser(data);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error}</p>;
+  return <h1>{user.name}</h1>;
+}
+```
+
+Notice how `useState` manages three independent pieces of state (the data, the loading flag, and any error), while `useEffect` coordinates fetching and cleanup between them. This is a common enough pattern that it is often worth extracting into a custom hook like `useFetch(url)`, which would return `{ data, loading, error }` and let every component that needs to fetch data reuse the same well-tested logic instead of repeating this pattern throughout the codebase.
+
+## The Rules of Hooks, and Why They Exist
+
+React enforces two rules for hooks: only call them at the top level of a component or another hook (never inside loops, conditions, or nested functions), and only call them from React function components or custom hooks (never from regular JavaScript functions). These rules exist because React tracks hook state by call order, not by name:
+
+```javascript
+// Breaks the rules: a conditional hook call shifts every subsequent hook's position
+function Profile({ showBio }) {
+  if (showBio) {
+    const [bio, setBio] = useState(""); // WRONG: conditional hook call
+  }
+  const [name, setName] = useState(""); // its "slot" now shifts depending on showBio
+}
+```
+
+On the first render, React builds an internal ordered list of hook calls for that component. On every subsequent render, it matches each hook call back to that same position in the list to know which piece of state or effect it corresponds to. If a hook call is skipped on one render but present on another — as happens when a hook is placed inside an `if` block — every hook after it shifts by one position, and React ends up handing back the wrong state to the wrong hook, usually. The `eslint-plugin-react-hooks` package enforces both rules automatically and will catch the vast majority of accidental violations before they ever reach production.
+
+## Conclusion
+
+Hooks flattened React's mental model: instead of juggling lifecycle methods across a class, you compose small, focused hooks that each do one job. Start with `useState` and `useEffect`, add `useContext` and `useRef` as real needs arise, and reach for `useMemo`/`useCallback` only once profiling tells you to. Custom hooks are where this model really pays off, letting you package logic once and reuse it everywhere.

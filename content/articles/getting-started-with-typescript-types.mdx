@@ -1,0 +1,222 @@
+---
+title: "Getting Started with TypeScript Types"
+description: "A beginner-friendly introduction to TypeScript's type system, covering primitives, interfaces, unions, type inference, and how to add types to existing JavaS..."
+category: typescript
+tags: ["typescript", "types", "beginners", "javascript"]
+author: priya-sharma
+publishedAt: "2024-03-25"
+updatedAt: "2024-05-12"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Do I need to type every variable in TypeScript?"
+    answer: "No. TypeScript's type inference figures out most types automatically from how you initialize a variable. Explicit type annotations are mainly useful for function parameters, return types, and cases where inference cannot determine the type on its own."
+  - question: "What is the difference between an interface and a type alias?"
+    answer: "Both can describe the shape of an object, and in most everyday cases they are interchangeable. Interfaces support declaration merging and are generally preferred for public object shapes, while type aliases are required for unions, tuples, and mapped types."
+  - question: "What does the any type do, and should I use it?"
+    answer: "any disables type checking entirely for that value, which defeats the purpose of using TypeScript. It is sometimes necessary when migrating JavaScript code, but unknown is almost always a safer alternative because it still forces you to narrow the type before use."
+  - question: "Can TypeScript catch runtime errors?"
+    answer: "TypeScript only checks types at compile time; it does not add any runtime checks by default. Data coming from outside your program, like API responses, should still be validated at runtime with a library or manual checks."
+references:
+  - title: "TypeScript Handbook — The Basics"
+    url: "https://www.typescriptlang.org/docs/handbook/2/basic-types.html"
+  - title: "TypeScript Handbook — Everyday Types"
+    url: "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html"
+  - title: "TypeScript Handbook — Type Inference"
+    url: "https://www.typescriptlang.org/docs/handbook/type-inference.html"
+---
+
+## Introduction
+
+TypeScript is JavaScript with an optional type system layered on top. It compiles down to plain JavaScript, so it runs anywhere JavaScript runs, but along the way it catches an enormous number of bugs before your code ever executes — mismatched function arguments, typos in property names, and null values sneaking into places that expect real data. This guide introduces the core pieces of TypeScript's type system so you can start typing your own code with confidence.
+
+## Basic Types
+
+TypeScript supports the same primitive values as JavaScript, just with explicit names you can attach to variables:
+
+```typescript
+let username: string = "ada";
+let age: number = 32;
+let isAdmin: boolean = false;
+let tags: string[] = ["engineer", "mentor"];
+let coordinates: [number, number] = [12.9, 77.6]; // tuple
+```
+
+In most of these cases, you do not actually need the annotation, because TypeScript can infer the type from the initial value.
+
+## Type Inference
+
+TypeScript is smart enough to figure out types on its own in the vast majority of cases:
+
+```typescript
+let score = 95;      // inferred as number
+score = "ninety-five"; // Error: Type 'string' is not assignable to type 'number'
+```
+
+This is why experienced TypeScript developers rarely annotate local variables — inference already does the work. Annotations become important at the boundaries of your code: function parameters, return types, and exported values.
+
+## Typing Functions
+
+```typescript
+function add(a: number, b: number): number {
+  return a + b;
+}
+
+function greet(name: string, greeting?: string): string {
+  return `${greeting ?? "Hello"}, ${name}!`;
+}
+```
+
+The `?` after `greeting` marks it as optional. Function parameters without a default value or `?` are required, and TypeScript will flag any call site that omits them.
+
+## Object Shapes with Interfaces
+
+An `interface` describes the shape an object must have:
+
+```typescript
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  isActive?: boolean;
+}
+
+function printUser(user: User) {
+  console.log(`${user.name} <${user.email}>`);
+}
+
+printUser({ id: 1, name: "Grace Hopper", email: "grace@example.com" });
+```
+
+If you pass an object missing `email`, or with an extra misspelled property, TypeScript reports the mismatch immediately, long before that bug would have surfaced at runtime.
+
+## Union and Literal Types
+
+Union types let a value be one of several specific types, which is especially useful for modeling states:
+
+```typescript
+type RequestState = "idle" | "loading" | "success" | "error";
+
+function renderStatus(state: RequestState) {
+  if (state === "loading") return "Loading...";
+  if (state === "error") return "Something went wrong.";
+  return "Ready";
+}
+```
+
+Because `RequestState` only allows those four exact strings, misspelling one anywhere in your codebase becomes a compile error instead of a silent bug.
+
+## Type Aliases and Combining Types
+
+`type` lets you name any type, including unions, and can be combined with `&` to merge object shapes:
+
+```typescript
+type Timestamped = { createdAt: string };
+type User = { id: number; name: string };
+type TimestampedUser = User & Timestamped;
+
+const record: TimestampedUser = {
+  id: 1,
+  name: "Ada",
+  createdAt: "2024-01-01",
+};
+```
+
+## Working with Arrays and Objects Safely
+
+TypeScript really shines when handling collections of data, since it tracks the type of every element:
+
+```typescript
+interface Product {
+  id: number;
+  price: number;
+}
+
+function totalPrice(products: Product[]): number {
+  return products.reduce((sum, p) => sum + p.price, 0);
+}
+```
+
+If you try to access `products[0].pricee` (a typo), TypeScript flags it instantly inside your editor.
+
+## unknown vs any
+
+`any` opts a value out of type checking completely, which is risky. `unknown` is the safer alternative — it still requires you to narrow the type before you can use it:
+
+```typescript
+function handleResponse(data: unknown) {
+  if (typeof data === "string") {
+    console.log(data.toUpperCase()); // safe, narrowed to string
+  }
+}
+```
+
+## Best Practices
+
+- Let inference handle local variables; reserve explicit annotations for function signatures and exported values.
+- Prefer `unknown` over `any` when a type genuinely cannot be known ahead of time.
+- Model finite sets of states with union of string literals instead of a generic `string`.
+- Turn on `strict` mode in `tsconfig.json` from the start of a project — retrofitting strictness later is far more work.
+- Use interfaces for object shapes that might be extended, and type aliases for unions and utility types.
+
+## Common Mistakes to Avoid
+
+- Reaching for `any` the moment TypeScript complains, which silences the exact safety net you added it for.
+- Typing every single variable explicitly, adding noise without adding safety.
+- Forgetting that TypeScript types disappear at runtime — they cannot validate data coming from a network request or user input without an additional runtime check.
+- Ignoring compiler errors instead of fixing the underlying type mismatch, which usually indicates a real bug.
+
+## Narrowing Types at Runtime
+
+Static types disappear once your code compiles to JavaScript, but TypeScript can still track how a value's type changes as your code branches, a process called narrowing. Simple runtime checks like `typeof`, `Array.isArray`, or an `instanceof` check are enough for TypeScript to refine a broader type into a more specific one within that branch:
+
+```typescript
+function formatValue(value: string | number | Date): string {
+  if (typeof value === "string") {
+    return value.toUpperCase(); // narrowed to string here
+  }
+  if (typeof value === "number") {
+    return value.toFixed(2); // narrowed to number here
+  }
+  return value.toISOString(); // by elimination, narrowed to Date
+}
+```
+
+This is especially useful when working with union types or data of uncertain shape, such as an API response typed as `unknown`. Rather than casting with `as` (which bypasses checking entirely and just tells the compiler to trust you), writing an explicit narrowing check keeps the compiler actively verifying your assumptions:
+
+```typescript
+function isUser(value: unknown): value is { id: number; name: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    "name" in value
+  );
+}
+```
+
+This kind of function is called a type predicate (note the `value is ...` return type), and calling it inside an `if` statement narrows `value`'s type for the rest of that branch, giving you both a runtime check and compile-time safety from a single function.
+
+## Utility Types That Save You Boilerplate
+
+TypeScript ships a set of built-in utility types that transform existing types instead of making you write near-duplicate interfaces by hand. `Partial<T>` makes every property optional, which is exactly what you want for an update function that only changes some fields:
+
+```typescript
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+function updateUser(id: number, changes: Partial<User>) {
+  // changes might only include { name: "New Name" }
+}
+```
+
+`Pick<T, K>` and `Omit<T, K>` go the other direction, letting you derive a smaller type from a larger one by explicitly including or excluding keys — `Pick<User, "id" | "name">` gives you just those two fields, while `Omit<User, "email">` gives you everything except `email`. These are especially valuable for API layers, where a "create" request often omits the server-generated `id`, and a "public profile" view often omits sensitive fields like `email`. Reaching for a utility type instead of hand-writing a parallel interface keeps both types locked together — if you add a field to `User`, every derived type built with `Partial`, `Pick`, or `Omit` updates automatically, whereas a manually duplicated interface would silently drift out of sync.
+
+## Conclusion
+
+TypeScript's type system is not about writing more code — it is about making the code you already write self-documenting and safer to change. Start small: add interfaces to your main data models, type your function signatures, and let inference do the rest. Within a few files, you will start noticing bugs that TypeScript catches before you even run your program.

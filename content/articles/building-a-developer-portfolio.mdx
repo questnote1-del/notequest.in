@@ -1,0 +1,155 @@
+---
+title: "Building a Developer Portfolio That Gets Noticed"
+description: "Practical advice for building a developer portfolio that actually gets noticed by recruiters and hiring managers, covering project selection, presentation, a..."
+category: career
+tags: ["career", "portfolio", "job-search", "web-development"]
+author: neha-patel
+publishedAt: "2026-04-08"
+updatedAt: "2026-05-20"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "How many projects should I include in my developer portfolio?"
+    answer: "Three to five strong, well-documented projects almost always make a better impression than ten shallow ones. Depth, polish, and a clear explanation of your specific contribution matter far more than sheer quantity."
+  - question: "Should I include tutorial-following projects in my portfolio?"
+    answer: "Only if you meaningfully extended or modified them beyond the tutorial's original scope. A project that is functionally identical to a well-known tutorial signals limited independent problem-solving, which is exactly what a portfolio is meant to demonstrate."
+  - question: "Do I need a personal portfolio website, or is GitHub enough?"
+    answer: "A dedicated portfolio site is not strictly required, but it lets you control the narrative around your projects — screenshots, explanations, and context — in a way a raw GitHub profile does not, and it is a relatively small additional project that itself demonstrates real skills."
+  - question: "Should I remove old or unpolished projects from my portfolio?"
+    answer: "Generally yes, if they no longer reflect your current skill level or best work. A portfolio is a curated highlight reel, not a complete archive, and outdated projects can drag down the overall impression of an otherwise strong portfolio."
+references:
+  - title: "GitHub Docs — About READMEs"
+    url: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes"
+  - title: "MDN — Getting a developer job"
+    url: "https://developer.mozilla.org/en-US/docs/Learn_web_development/Getting_started/Soft_skills"
+  - title: "web.dev — Learn about performance and best practices"
+    url: "https://web.dev/learn"
+---
+
+## Introduction
+
+A portfolio is often the first real impression a recruiter or hiring manager forms of you as a developer — sometimes before they even read your resume in detail. A weak portfolio (a handful of unfinished tutorial clones with no explanation) can undercut an otherwise strong candidate, while a focused, well-presented one can open doors that a resume alone cannot. This guide covers what actually makes a portfolio effective.
+
+## Quality Over Quantity
+
+It is tempting to list every project you have ever built, but a portfolio with ten shallow, half-finished projects is weaker than one with three polished, complete, well-documented ones. Reviewers spend seconds, not minutes, on an initial pass — a small number of strong projects presented clearly will always outperform a long list that dilutes attention across weaker work.
+
+## Choosing Projects That Demonstrate Real Skill
+
+The strongest portfolio projects tend to share a few traits:
+
+- They solve a real, specific problem — even a small one — rather than being a generic, interchangeable clone of a well-known app.
+- They are complete: deployed, functional, and free of obvious broken features.
+- They demonstrate a range of skills relevant to the roles you are applying for (frontend, backend, database design, testing, deployment).
+- You can speak in detail about the decisions you made, the trade-offs you faced, and what you would do differently.
+
+A to-do list app is a fine learning exercise, but it rarely differentiates you unless it demonstrates something extra — a genuinely thoughtful UI, an interesting technical constraint you solved, or a feature set that goes clearly beyond the standard tutorial version.
+
+## Writing a README That Actually Helps
+
+A project's README is often the first (and sometimes only) thing a reviewer reads in detail. A strong README typically includes:
+
+```markdown
+# Project Name
+
+A one-sentence description of what this project does and why it exists.
+
+## Live Demo
+[https://myproject.example.com](https://myproject.example.com)
+
+## Features
+- Feature one, briefly described
+- Feature two, briefly described
+
+## Tech Stack
+React, Node.js, PostgreSQL, deployed on Vercel/Railway
+
+## What I Learned / Challenges
+A short paragraph on a specific technical challenge you solved and how.
+
+## Running Locally
+```bash
+git clone https://github.com/you/project
+npm install
+npm run dev
+```
+```
+
+The "What I Learned / Challenges" section is frequently skipped but genuinely valuable — it is where you demonstrate reflection and problem-solving, not just the ability to follow a tutorial to a working result.
+
+## Deploying Your Projects
+
+An undeployed project, viewable only by cloning the repository and running it locally, dramatically reduces how many people will actually see it working. Deploy every serious portfolio project somewhere reviewers can access it with a single click — modern hosting platforms make this largely free and fast for small projects.
+
+```text
+Frontend-only projects:   Vercel, Netlify, GitHub Pages
+Full-stack projects:      Vercel, Railway, Render, Fly.io
+Databases:                Managed free tiers from Supabase, Neon, PlanetScale, MongoDB Atlas
+```
+
+## Building a Personal Portfolio Site
+
+A dedicated portfolio site is not strictly required — many developers get hired with just a well-organized GitHub profile and a strong resume — but it offers a few real advantages: full control over presentation, the ability to explain context a GitHub README cannot, and it is itself a small project that demonstrates real front-end skills.
+
+```html
+<section class="project-card">
+  <h3>Project Name</h3>
+  <p>A one-sentence description focused on the problem it solves.</p>
+  <div class="tech-stack">React · Node.js · PostgreSQL</div>
+  <a href="https://myproject.example.com">Live Demo</a>
+  <a href="https://github.com/you/project">Source Code</a>
+</section>
+```
+
+Keep the design simple and fast-loading — a portfolio site that takes several seconds to load, or is difficult to navigate, undermines the very skills it is meant to showcase.
+
+## Curating and Pruning Over Time
+
+Your best work today is probably better than your best work a year ago. Periodically review your portfolio and remove projects that no longer represent your current skill level, rather than letting the portfolio grow indefinitely into an unfiltered archive. A portfolio is a curated highlight reel, not a full history of everything you have ever built.
+
+## Best Practices
+
+- Feature three to five strong, complete, deployed projects rather than many shallow ones.
+- Write a genuine README for every featured project, including what you specifically built and learned.
+- Deploy every project you want reviewers to actually interact with, not just read the source code for.
+- Prune older or weaker projects periodically as your skills grow, keeping the overall portfolio consistently strong.
+- Tailor which projects you highlight based on the specific type of role you are applying for.
+
+## Common Mistakes to Avoid
+
+- Including many nearly identical tutorial-clone projects with no meaningful personal extension or variation.
+- Leaving projects undeployed, requiring reviewers to clone and run code locally just to see them working.
+- Writing README files that only contain setup instructions, with no explanation of what the project does or what you learned building it.
+- Never revisiting or pruning the portfolio, letting outdated, weaker projects sit alongside your current best work.
+
+## Writing a Case Study Instead of a Feature List
+
+The single highest-leverage improvement most developer portfolios can make is replacing a bullet list of features with a short case study for each project — a few paragraphs that walk through the actual decisions made, not just what the finished thing does:
+
+```text
+## Project: Real-Time Order Dashboard
+
+**The problem**: Support staff needed to see incoming orders update
+live, without refreshing, across multiple browser tabs.
+
+**The approach**: WebSockets for live updates, with a fallback to
+polling for clients behind restrictive corporate proxies. Chose
+Socket.IO specifically for its automatic fallback handling.
+
+**A challenge**: Initial version re-rendered the entire order table on
+every update, causing visible jank with 200+ orders. Fixed by keying
+rows and memoizing row components, reducing re-renders by ~90%.
+
+**What I'd do differently**: Add optimistic UI updates for the
+status-change action, which currently waits for server confirmation.
+```
+
+This format does something a plain feature list cannot: it shows how you think, not just what you built. A reviewer skimming dozens of portfolios can tell within seconds whether a project was built by following a tutorial closely or by making genuine, defensible engineering decisions, and a short "problem, approach, challenge, what I'd do differently" structure surfaces exactly that signal without requiring the reviewer to read your entire codebase. It also gives you something concrete and specific to talk about in an interview, rather than needing to reconstruct your reasoning from memory months after you actually built the thing.
+
+Deploying the project somewhere a reviewer can actually click around, rather than leaving it as source code alone, matters more than most developers expect. A live, working link removes all the friction of cloning a repository and running it locally just to see what it does, and reviewers — often skimming many candidates in a short window — are far more likely to actually experience a deployed project than to spin one up themselves. Free hosting options exist for almost every kind of project today, so there is rarely a good excuse for a portfolio project to exist only as unrun source code.
+
+## Conclusion
+
+A portfolio's job is not to prove you can code — it is to make a reviewer want to talk to you. A small number of complete, well-explained, deployed projects, with READMEs that show genuine reflection on what you built and learned, will consistently outperform a long, unfiltered list of half-finished tutorials.

@@ -1,0 +1,178 @@
+---
+title: "The GitHub Pull Request Workflow"
+description: "A practical walkthrough of the GitHub pull request workflow, covering opening PRs, requesting reviews, resolving conversations, and merge strategies in depth."
+category: github
+tags: ["github", "pull-requests", "code-review", "collaboration"]
+author: notequest-team
+publishedAt: "2025-06-29"
+updatedAt: "2025-08-18"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the difference between a fork-based and branch-based pull request workflow?"
+    answer: "In a branch-based workflow, contributors push branches directly to the same repository and open pull requests from there, which requires write access. In a fork-based workflow, external contributors push to their own fork and open a pull request against the original repository."
+  - question: "What is a draft pull request?"
+    answer: "A draft pull request signals that the work is still in progress and not ready for a full review, while still allowing early feedback, CI runs, and visibility into ongoing work before it is marked ready for review."
+  - question: "What is the difference between merge, squash, and rebase merge strategies on GitHub?"
+    answer: "A regular merge keeps every individual commit and adds a merge commit; squash merge combines all commits from the branch into a single commit on the base branch; rebase merge replays each commit individually onto the base branch without an extra merge commit."
+  - question: "How do I link a pull request to an issue so it closes automatically?"
+    answer: "Include a keyword like 'Closes #42' or 'Fixes #42' in the pull request description, and GitHub will automatically close the referenced issue when that pull request is merged into the repository's default branch."
+references:
+  - title: "GitHub Docs — About pull requests"
+    url: "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests"
+  - title: "GitHub Docs — Reviewing proposed changes"
+    url: "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests"
+  - title: "GitHub Docs — About merge methods"
+    url: "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/about-merge-methods-on-github"
+---
+
+## Introduction
+
+The pull request is the core unit of collaboration on GitHub — it is where code gets reviewed, discussed, tested, and eventually merged. Whether you are contributing to an open-source project or working on an internal team repository, understanding the full pull request lifecycle helps you collaborate more effectively and get your changes merged with less friction.
+
+## Starting a Pull Request
+
+A pull request begins with a branch containing your changes, pushed to GitHub:
+
+```bash
+git checkout -b feature/add-dark-mode
+# make your changes
+git add .
+git commit -m "Add dark mode toggle to settings"
+git push -u origin feature/add-dark-mode
+```
+
+From there, GitHub's web interface (or the `gh` CLI) lets you open a pull request comparing your branch against the base branch, typically `main`:
+
+```bash
+gh pr create --title "Add dark mode toggle" --body "Adds a toggle in settings that persists the user's theme preference."
+```
+
+## Writing a Good Pull Request Description
+
+A helpful description saves reviewers time and gives future readers context. A solid structure includes:
+
+- **What** changed and **why**, in a sentence or two.
+- Any notable implementation decisions or trade-offs.
+- How to test or verify the change manually, if relevant.
+- Linked issues, using keywords like `Closes #42` to auto-close them on merge.
+
+```text
+## Summary
+Adds a dark mode toggle to the settings page. Preference is persisted
+in localStorage and applied via a `data-theme` attribute on <html>.
+
+## Testing
+1. Open Settings
+2. Toggle dark mode
+3. Refresh the page — preference should persist
+
+Closes #42
+```
+
+## Draft Pull Requests
+
+If you want early feedback or CI results before the work is fully ready, open the pull request as a draft:
+
+```bash
+gh pr create --draft
+```
+
+A draft PR runs the same checks and is visible to collaborators, but it signals "not ready for a full review yet," and GitHub blocks it from being merged until you mark it ready for review.
+
+## Requesting and Responding to Reviews
+
+Reviewers can approve, request changes, or leave general comments, often attached to specific lines of the diff. As the author, address each conversation thread individually:
+
+```bash
+# after addressing feedback
+git add .
+git commit -m "Address review feedback: extract toggle into its own component"
+git push
+```
+
+Resolve each conversation once you have made the corresponding change (or explained why you did not), so reviewers can see at a glance what still needs attention.
+
+## Handling CI Checks
+
+Most repositories run automated checks — tests, linting, type checking — on every pull request via GitHub Actions or another CI provider. A pull request typically cannot be merged until required checks pass:
+
+```text
+✔ lint         — passed
+✔ unit-tests   — passed
+✖ type-check   — failed (2 errors)
+```
+
+Push a fix, and the checks automatically re-run against the updated commit.
+
+## Merge Strategies
+
+GitHub supports three ways to bring a pull request's changes into the base branch:
+
+```text
+Merge commit:  Keeps every individual commit, adds one merge commit joining histories.
+Squash merge:  Combines all commits from the PR into a single commit on the base branch.
+Rebase merge:  Replays each commit individually onto the base branch, no merge commit.
+```
+
+Squash merging is popular for keeping `main`'s history clean and readable, especially when feature branches accumulate many small "WIP" or "fix typo" commits that are not individually meaningful.
+
+## Linking Issues and Auto-Closing Them
+
+```text
+Fixes #101
+Closes #102, #103
+Resolves org/other-repo#55
+```
+
+Using these keywords in a pull request description automatically closes the referenced issues the moment the pull request merges into the repository's default branch.
+
+## Keeping a Pull Request Up to Date
+
+If `main` moves forward significantly while your pull request is open, update your branch to avoid conflicts piling up:
+
+```bash
+git checkout feature/add-dark-mode
+git fetch origin
+git merge origin/main
+# or: git rebase origin/main, for a cleaner linear history
+git push
+```
+
+GitHub also offers an "Update branch" button directly in the pull request UI for a quick merge-based update.
+
+## Best Practices
+
+- Keep pull requests small and focused on one logical change, which makes them faster and easier to review.
+- Write a description that explains the "why," not just the "what" — the diff already shows what changed.
+- Respond to every review comment, even if just to explain a decision, rather than leaving threads unresolved.
+- Use draft pull requests for early, in-progress feedback instead of opening a "real" PR before the work is ready.
+- Agree on a merge strategy as a team, and apply it consistently rather than mixing merge, squash, and rebase merges arbitrarily.
+
+## Common Mistakes to Avoid
+
+- Opening enormous pull requests that touch dozens of files, making them nearly impossible to review carefully.
+- Force-pushing over a branch mid-review without communicating, which can hide what changed since the last review pass.
+- Ignoring failing CI checks and merging anyway, "just this once."
+- Leaving review comments unresolved and unaddressed, causing them to pile up and get lost by the time of the next review round.
+
+## Requesting and Responding to Review Effectively
+
+The way you request review, and how you respond to feedback, shapes how quickly a pull request actually gets merged. Assigning specific reviewers rather than leaving it open to "whoever gets to it" and writing a short note about what kind of feedback you are looking for — a full design review versus a quick sanity check — helps reviewers calibrate how much time to spend:
+
+```text
+## What to review
+This PR adds rate limiting middleware. The core logic in
+`middleware/rateLimiter.js` is the important part to review closely;
+the test file changes are mostly boilerplate setup.
+```
+
+When feedback comes in, resist the urge to treat every comment as either "fix it silently" or "argue about it in the thread." Reacting to a comment with a short acknowledgment, pushing a fix, and replying with what changed keeps the conversation easy to follow for anyone reviewing the thread later — including your future self, six months from now, wondering why a particular line looks the way it does. For comments you disagree with, explaining your reasoning directly in the thread (rather than silently ignoring the comment) keeps the review a genuine two-way conversation rather than a one-directional checklist, and often surfaces context the reviewer did not have, or vice versa.
+
+Keeping pull requests small is one of the most effective, and most consistently ignored, pieces of advice for smoother reviews. A 2,000-line pull request is genuinely difficult to review carefully — reviewers either spend an outsized amount of time on it or, more commonly, skim it and approve without deeply engaging, defeating much of the purpose of review in the first place. Splitting a large feature into a sequence of smaller, independently reviewable pull requests, even behind a temporary feature flag if the feature isn't ready to ship incrementally, consistently produces faster, more thorough reviews than one large drop of code.
+
+## Conclusion
+
+A pull request is more than a mechanism for merging code — it is a conversation, a safety net, and a historical record of why a change was made. Investing a little extra effort into a clear description, small focused diffs, and responsive communication during review pays off many times over in how smoothly your changes make it into the codebase.

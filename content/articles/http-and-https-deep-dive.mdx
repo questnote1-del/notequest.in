@@ -1,0 +1,171 @@
+---
+title: "HTTP and HTTPS Deep Dive"
+description: "A deep dive into how HTTP and HTTPS work, covering request/response structure, methods, status codes, headers, and how TLS secures HTTP traffic today."
+category: computer-networks
+tags: ["computer-networks", "http", "https", "web"]
+author: neha-patel
+publishedAt: "2026-01-10"
+updatedAt: "2026-03-18"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the actual difference between HTTP and HTTPS?"
+    answer: "HTTPS is HTTP sent over an encrypted TLS connection. The request and response format is identical; HTTPS simply wraps that communication in encryption so it cannot be read or tampered with by anyone intercepting the traffic in transit."
+  - question: "Is HTTP stateless, and what does that mean?"
+    answer: "Yes, HTTP is stateless, meaning each request is handled independently with no memory of previous requests from the same client. Features like login sessions are built on top of HTTP using cookies or tokens, not by HTTP itself remembering anything."
+  - question: "What happens during a TLS handshake?"
+    answer: "The client and server agree on encryption algorithms, the server proves its identity with a certificate, and both sides establish a shared secret key used to encrypt all subsequent communication, all before any actual HTTP data is exchanged."
+  - question: "What is the difference between HTTP/1.1 and HTTP/2?"
+    answer: "HTTP/1.1 typically opens a new connection (or a limited number of connections) per set of requests and processes them largely in sequence, while HTTP/2 multiplexes many requests and responses over a single connection simultaneously, significantly reducing load time for pages with many resources."
+references:
+  - title: "MDN — An overview of HTTP"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview"
+  - title: "MDN — HTTP response status codes"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
+  - title: "MDN — Transport Layer Security (TLS)"
+    url: "https://developer.mozilla.org/en-US/docs/Glossary/TLS"
+---
+
+## Introduction
+
+Every time you load a webpage, call an API, or submit a form, HTTP is quietly doing the work of describing exactly what is being requested and what is being returned. Understanding its structure — methods, headers, status codes — and how HTTPS secures it with TLS turns a lot of "why did this API call behave that way" mysteries into predictable, explainable behavior.
+
+## The Anatomy of an HTTP Request
+
+```text
+GET /api/users/42 HTTP/1.1
+Host: example.com
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+Every request has a method (`GET`), a path (`/api/users/42`), a protocol version, and a set of headers providing metadata about the request. A request with a body (like `POST`) includes that body after the headers, separated by a blank line.
+
+## The Anatomy of an HTTP Response
+
+```text
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 47
+
+{"id": 42, "name": "Ada Lovelace"}
+```
+
+The response includes a status line (protocol version, status code, and a short reason phrase), its own headers, and a body containing the actual requested data.
+
+## HTTP Methods and What They Mean
+
+```text
+GET     - retrieve a resource, should have no side effects
+POST    - create a new resource, or submit data for processing
+PUT     - replace a resource entirely
+PATCH   - partially update a resource
+DELETE  - remove a resource
+HEAD    - like GET, but returns only headers, no body
+OPTIONS - ask what methods/headers are supported for a resource
+```
+
+`GET`, `PUT`, and `DELETE` are expected to be "idempotent" — making the same request multiple times should produce the same end state as making it once. `POST` is generally not idempotent, since submitting the same creation request twice typically creates two separate resources.
+
+## Status Code Categories
+
+```text
+1xx - Informational  (rarely seen directly, e.g. 100 Continue)
+2xx - Success         (200 OK, 201 Created, 204 No Content)
+3xx - Redirection     (301 Moved Permanently, 302 Found, 304 Not Modified)
+4xx - Client Error    (400 Bad Request, 401 Unauthorized, 404 Not Found)
+5xx - Server Error    (500 Internal Server Error, 503 Service Unavailable)
+```
+
+Knowing the category alone (without memorizing every specific code) already tells you a lot: a `4xx` means the client needs to change something about the request, while a `5xx` means the problem is on the server's side.
+
+## Important Headers
+
+```text
+Content-Type: application/json      -- format of the body
+Cache-Control: max-age=3600         -- how long a response can be cached
+Authorization: Bearer <token>       -- credentials for the request
+Set-Cookie: session=abc123          -- server asking the client to store a cookie
+User-Agent: Mozilla/5.0 ...         -- identifies the client software
+```
+
+## HTTP Is Stateless — And Why That Matters
+
+Each HTTP request is handled completely independently; the protocol itself has no built-in memory of previous requests. This is why login sessions require an explicit mechanism — typically a cookie or a bearer token sent with every subsequent request — rather than the server simply "remembering" that you logged in five requests ago.
+
+```text
+Request 1: POST /login          -> server responds with Set-Cookie: session=abc123
+Request 2: GET /dashboard        -> browser automatically sends Cookie: session=abc123
+                                     server looks up "abc123" to identify the user
+```
+
+## How HTTPS Secures HTTP: The TLS Handshake
+
+HTTPS does not change the HTTP request/response format at all — it wraps the entire exchange inside an encrypted TLS connection. Before any HTTP data is sent, client and server perform a handshake:
+
+```text
+1. Client: "Hello, here are the encryption algorithms I support"
+2. Server: "Let's use this algorithm. Here's my certificate proving who I am"
+3. Client: verifies the certificate against a trusted authority
+4. Client and server: establish a shared secret key for this session
+5. All subsequent HTTP traffic is encrypted using that shared key
+```
+
+Once the handshake completes, the actual HTTP request and response travel exactly as described above, just encrypted so that anyone intercepting the traffic in transit sees only unreadable ciphertext.
+
+## Certificates and Trust
+
+A server's TLS certificate is issued and digitally signed by a Certificate Authority (CA) that browsers already trust. This is what lets a browser verify "this really is example.com" without ever having communicated with example.com before — it trusts the CA's signature, and the CA has (in theory) verified the server operator's identity before issuing the certificate.
+
+## HTTP/1.1 vs HTTP/2
+
+```text
+HTTP/1.1: Typically limited to a small number of parallel connections per host;
+          requests on the same connection are processed largely in order,
+          which can create head-of-line blocking for many small resources.
+
+HTTP/2:   Multiplexes many requests and responses over a single connection
+          simultaneously, plus header compression, significantly reducing
+          load time for pages with many resources (scripts, images, styles).
+```
+
+Both still use the same fundamental request/response model with methods, headers, and status codes — HTTP/2 changes how that model is transmitted efficiently over the wire, not what it means.
+
+## Best Practices
+
+- Use the correct HTTP method for each operation, and keep `GET` requests free of side effects.
+- Set appropriate `Cache-Control` headers so browsers and CDNs can cache responses correctly, reducing unnecessary repeated requests.
+- Always serve production traffic over HTTPS, including for APIs that do not seem to carry "sensitive" data — TLS also protects against tampering, not just eavesdropping.
+- Use specific, meaningful status codes rather than defaulting to 200 for every response, including errors.
+- Understand that HTTP's statelessness is a feature, not a limitation — build session/auth mechanisms explicitly on top rather than fighting the protocol.
+
+## Common Mistakes to Avoid
+
+- Using `GET` for requests that have side effects (like deleting data), which can cause accidental repeated execution from browser prefetching or retries.
+- Assuming HTTPS only matters for pages that handle passwords or payment details, when it protects the integrity and privacy of all traffic.
+- Ignoring cache headers entirely, causing browsers to either over-fetch fresh data or serve stale data longer than intended.
+- Treating status codes as an afterthought, returning 200 for error conditions and forcing clients to parse response bodies just to detect failure.
+
+## Caching Headers and Conditional Requests
+
+HTTP has a built-in negotiation mechanism that lets a client avoid re-downloading a resource it already has, using a pair of complementary headers. `Cache-Control` tells the browser how long a response can be reused without even asking the server again, while `ETag` lets the client ask "has this changed since I last saw it?" cheaply:
+
+```text
+Response headers:
+Cache-Control: max-age=3600
+ETag: "a1b2c3d4"
+
+Next request (after max-age expires):
+If-None-Match: "a1b2c3d4"
+
+Server response, if unchanged:
+HTTP/1.1 304 Not Modified   (no body sent at all)
+```
+
+While `max-age` is still valid, the browser serves the cached copy directly with zero network request at all — the fastest possible outcome. Once it expires, the browser sends a conditional request with `If-None-Match` set to the previously received `ETag`; if the server's current version has the same ETag, it replies with a bodyless `304 Not Modified`, saving the bandwidth of re-sending unchanged content while still confirming freshness with a fast round trip. This two-tier system — trust the cache blindly for a while, then verify cheaply once that trust period expires — is exactly how static assets like JavaScript bundles and images stay fast to load on repeat visits without ever risking serving genuinely stale content indefinitely.
+
+## Conclusion
+
+HTTP's request/response model — methods, headers, status codes — has stayed remarkably stable even as the protocols carrying it have evolved from HTTP/1.1 to HTTP/2 and beyond. HTTPS adds a security layer around that same model rather than changing it. Understanding both deeply turns a lot of everyday web development debugging from guesswork into a systematic process.

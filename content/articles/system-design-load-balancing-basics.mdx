@@ -1,0 +1,172 @@
+---
+title: "Load Balancing Basics for System Design"
+description: "Learn the fundamentals of load balancing in system design, including load balancing algorithms, health checks, layer 4 vs layer 7 balancing, and common failu..."
+category: system-design
+tags: ["system-design", "load-balancing", "scalability", "networking"]
+author: arjun-mehta
+publishedAt: "2025-12-05"
+updatedAt: "2026-01-27"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "What is the difference between Layer 4 and Layer 7 load balancing?"
+    answer: "Layer 4 load balancing routes traffic based on network information like IP address and port, without inspecting the actual content of the request, while Layer 7 load balancing inspects the application-level content, such as HTTP headers or URL paths, to make smarter routing decisions."
+  - question: "What is round robin load balancing?"
+    answer: "Round robin distributes incoming requests to backend servers in a fixed rotating order, sending the first request to server one, the second to server two, and so on, cycling back to the first server after reaching the end of the list."
+  - question: "Why do load balancers perform health checks?"
+    answer: "Health checks periodically verify that each backend server is still responding correctly, allowing the load balancer to automatically stop routing traffic to servers that have crashed or become unresponsive, preventing users from being routed to a broken instance."
+  - question: "What is a single point of failure, and how does load balancing relate to it?"
+    answer: "A single point of failure is any component whose failure brings down the entire system. Load balancers distribute traffic across multiple backend servers to remove the backend as a single point of failure, but the load balancer itself must then be made highly available too, often through redundant pairs."
+references:
+  - title: "AWS — What is Load Balancing?"
+    url: "https://aws.amazon.com/what-is/load-balancing/"
+  - title: "MDN — An overview of HTTP"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview"
+  - title: "NGINX Docs — Load Balancing"
+    url: "https://docs.nginx.com/nginx/admin-guide/load-balancer/http-load-balancer/"
+---
+
+## Introduction
+
+A single server can only handle so much traffic before it becomes a bottleneck, and it represents a single point of failure — if it goes down, the whole system goes down with it. Load balancers solve both problems at once: they distribute incoming traffic across multiple backend servers, and they route around servers that are unhealthy. This guide covers the fundamentals every system design discussion of load balancing should include.
+
+## What a Load Balancer Actually Does
+
+A load balancer sits between clients and a pool of backend servers, deciding which server should handle each incoming request:
+
+```text
+                     +--> Server 1
+Client -> Load Balancer --> Server 2
+                     +--> Server 3
+```
+
+From the client's perspective, there is a single address to talk to; from the backend's perspective, traffic is spread across a pool that can grow or shrink independently.
+
+## Layer 4 vs Layer 7 Load Balancing
+
+Load balancers operate at different levels of the network stack, with different capabilities:
+
+**Layer 4 (Transport layer)** — routes based on IP address and port only, without looking at the actual request content. It is fast and protocol-agnostic, but cannot make decisions based on, say, the URL path being requested.
+
+**Layer 7 (Application layer)** — understands the actual protocol (typically HTTP), and can route based on URL path, headers, cookies, or the request body:
+
+```text
+Layer 7 routing example:
+  /api/*      -> API server pool
+  /images/*   -> static asset server pool
+  /admin/*    -> admin server pool (with extra authentication checks)
+```
+
+Layer 7 balancers add more overhead per request since they inspect more of the traffic, but they enable much smarter, content-aware routing decisions.
+
+## Load Balancing Algorithms
+
+```text
+Round Robin:         Cycle through servers in fixed order (1, 2, 3, 1, 2, 3, ...)
+Weighted Round Robin: Like round robin, but stronger servers get proportionally more requests
+Least Connections:    Route to whichever server currently has the fewest active connections
+IP Hash:              Route based on a hash of the client's IP, so the same client
+                       consistently reaches the same server (useful for session stickiness)
+```
+
+```javascript
+// A simplified round-robin selector
+class RoundRobinBalancer {
+  constructor(servers) {
+    this.servers = servers;
+    this.index = 0;
+  }
+
+  getNextServer() {
+    const server = this.servers[this.index];
+    this.index = (this.index + 1) % this.servers.length;
+    return server;
+  }
+}
+```
+
+Round robin is simple and fair when all requests are roughly equal in cost and all servers have equal capacity; least connections tends to perform better when request processing times vary significantly, since it naturally avoids piling more work onto an already-busy server.
+
+## Health Checks
+
+A load balancer is only useful if it avoids sending traffic to a server that is down. Health checks periodically verify each backend is still responding correctly:
+
+```text
+Every 10 seconds:
+  GET /health on Server 1 -> 200 OK   -> keep in rotation
+  GET /health on Server 2 -> timeout  -> remove from rotation
+  GET /health on Server 3 -> 200 OK   -> keep in rotation
+```
+
+A dedicated `/health` endpoint typically checks that the application itself is running and can reach its critical dependencies (like the database), rather than just confirming the web server process is alive.
+
+```javascript
+app.get("/health", async (req, res) => {
+  try {
+    await db.query("SELECT 1"); // confirm database connectivity
+    res.status(200).json({ status: "ok" });
+  } catch (err) {
+    res.status(503).json({ status: "unhealthy" });
+  }
+});
+```
+
+## Session Stickiness
+
+Some applications store session state in memory on a specific server rather than in a shared store. In that case, a client needs to consistently reach the same server across requests, which load balancers support via "sticky sessions," typically implemented with a cookie or IP-based hashing:
+
+```text
+Client's first request  -> routed to Server 2, sticky cookie set
+All subsequent requests -> routed back to Server 2 via the sticky cookie
+```
+
+Sticky sessions solve the immediate problem but reintroduce some of the downsides of a single server for that client; storing session state in a shared store (like Redis) instead of in server memory avoids the need for stickiness entirely and is generally the more scalable long-term solution.
+
+## Avoiding the Load Balancer as a New Single Point of Failure
+
+Once traffic depends entirely on the load balancer, that load balancer itself becomes a critical component. Production setups typically run redundant load balancers, often behind a further layer of DNS-based or anycast routing, so no single load balancer instance failing takes down the whole system.
+
+```text
+DNS / Anycast
+     |
++----+----+
+|         |
+LB 1     LB 2  (active-passive or active-active pair)
+|         |
++----+----+
+     |
+Backend server pool
+```
+
+## Best Practices
+
+- Choose Layer 7 load balancing when routing decisions need to depend on request content (URL path, headers); Layer 4 when you need maximum throughput and simplicity for non-HTTP or simple HTTP traffic.
+- Implement a meaningful health check endpoint that verifies real dependencies, not just that the process is running.
+- Prefer storing session state in a shared external store over relying on sticky sessions, for easier scaling and failover.
+- Run load balancers themselves in a redundant configuration to avoid reintroducing a single point of failure.
+- Match the load balancing algorithm to your workload — least connections for variable request costs, round robin for roughly uniform ones.
+
+## Common Mistakes to Avoid
+
+- Relying on sticky sessions as a permanent architecture instead of moving toward shared, externalized session storage.
+- Using a health check that only confirms the server process is running, missing failures in critical downstream dependencies.
+- Deploying a single load balancer instance without redundancy, recreating the exact single-point-of-failure problem load balancing was meant to solve.
+- Choosing round robin for workloads with highly variable request costs, where least connections would distribute load far more evenly.
+
+## Sticky Sessions and Their Trade-offs
+
+Some applications store session data in the memory of the specific server that handled a user's login, rather than in a shared external store. In that case, a load balancer needs "sticky sessions" — routing all of a given user's subsequent requests back to that same server, usually via a cookie the load balancer sets:
+
+```text
+1. User logs in -> load balancer routes to Server B, sets cookie: LB_SERVER=B
+2. Every subsequent request includes that cookie
+3. Load balancer reads the cookie and routes directly to Server B, bypassing its usual algorithm
+```
+
+Sticky sessions solve the immediate problem, but they reintroduce a form of the single-point-of-failure risk that load balancing was meant to eliminate: if Server B goes down, every user "stuck" to it loses their session, and the load balancer's ability to evenly distribute load is compromised, since it can no longer freely route a sticky user's traffic to whichever server is currently least loaded. The generally preferred alternative is to make servers themselves stateless by moving session data into a shared, external store — Redis is a common choice — that any server in the pool can read from. This way, any server can handle any request, sticky sessions become unnecessary, and a server can be removed from the pool or restarted without any user losing their logged-in state. This pattern, keeping application servers stateless and pushing shared state into a dedicated store, is one of the most important enablers of horizontal scaling in general, well beyond just load balancing.
+
+## Conclusion
+
+Load balancing is the mechanism that turns "one server" into "a pool of servers that behaves like one, reliable service." Getting it right requires more than just picking an algorithm — health checks, session handling, and redundancy for the load balancer itself all need deliberate design, but together they are what let a system scale horizontally and survive individual server failures gracefully.

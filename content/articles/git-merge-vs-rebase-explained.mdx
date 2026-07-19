@@ -1,0 +1,173 @@
+---
+title: "Git Merge vs Rebase Explained"
+description: "Understand the difference between git merge and git rebase, when to use each one, and how rebasing rewrites commit history compared to a regular merge commit."
+category: git
+tags: ["git", "merge", "rebase", "version-control"]
+author: notequest-team
+publishedAt: "2025-06-11"
+updatedAt: "2025-07-24"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Does rebase lose any commits?"
+    answer: "No, rebase does not delete work, but it does rewrite commit hashes by replaying your commits on top of a new base, which means the original commits still exist temporarily but become unreachable once nothing references them."
+  - question: "Is it safe to rebase a branch other people are also working on?"
+    answer: "Generally no. Rebasing rewrites commit history, so anyone with the old commits will get conflicting history when they pull. The common rule is to only rebase local or personal branches that no one else has based work on."
+  - question: "What is the golden rule of rebasing?"
+    answer: "Never rebase a branch that has already been pushed and that other people might have pulled or built work on top of, unless the whole team explicitly agrees to coordinate around the rewritten history."
+  - question: "What does git pull --rebase do differently from a normal git pull?"
+    answer: "A normal git pull merges the remote changes into your local branch, creating a merge commit if there is divergence. git pull --rebase instead replays your local commits on top of the updated remote branch, avoiding an extra merge commit."
+references:
+  - title: "Git Docs — Rebasing"
+    url: "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+  - title: "Git Docs — git-merge"
+    url: "https://git-scm.com/docs/git-merge"
+  - title: "Atlassian — Merging vs. Rebasing"
+    url: "https://www.atlassian.com/git/tutorials/merging-vs-rebasing"
+---
+
+## Introduction
+
+Both `git merge` and `git rebase` accomplish the same basic goal: bringing changes from one branch into another. But they do it in fundamentally different ways, and that difference shows up clearly in your commit history. Understanding both — and when to reach for each — is one of the more nuanced but important Git skills.
+
+## Setting the Scene
+
+Imagine `main` has moved forward since you created `feature`:
+
+```text
+main:     A---B---C
+               \
+feature:        D---E
+```
+
+Both approaches want to combine `feature` into `main`, but they produce different results.
+
+## git merge: Preserving History As It Happened
+
+```bash
+git checkout main
+git merge feature
+```
+
+This creates a new merge commit that has two parents, joining both histories together exactly as they occurred:
+
+```text
+main:     A---B---C-------F  (F is the merge commit)
+               \         /
+feature:        D-------E
+```
+
+Nothing about the existing commits changes — `merge` only adds a new commit on top. This preserves an accurate, if sometimes noisy, record of exactly when and how branches diverged and recombined.
+
+## git rebase: Rewriting History for a Cleaner Line
+
+```bash
+git checkout feature
+git rebase main
+```
+
+Rebase takes your commits (`D` and `E`) and replays them one at a time on top of the current tip of `main` (`C`), producing brand new commits with different hashes:
+
+```text
+main:     A---B---C
+                    \
+feature:             D'---E'  (D and E, replayed on top of C)
+```
+
+After rebasing, merging `feature` into `main` becomes a simple fast-forward, with no merge commit at all:
+
+```bash
+git checkout main
+git merge feature
+# Fast-forward, main now points directly at E'
+```
+
+```text
+main:     A---B---C---D'---E'
+```
+
+The resulting history reads as a single straight line, as if you had written your commits directly on top of the latest `main` from the start.
+
+## The Trade-off in One Sentence
+
+Merge preserves true history but can create a tangled graph with lots of merge commits; rebase creates a clean, linear history but rewrites commit hashes, which is unsafe for commits other people have already based work on.
+
+## The Golden Rule of Rebasing
+
+Never rebase commits that have already been pushed and that someone else might have pulled. If two people have the old version of a commit, and you rebase it into a new commit with a different hash, anyone who already has the old one will run into confusing, duplicated, or conflicting history when they try to sync.
+
+```bash
+# Safe: rebasing your own local feature branch before it's pushed or shared
+git checkout feature
+git rebase main
+
+# Risky: rebasing a branch that teammates have already pulled and built on
+git checkout shared-branch
+git rebase main
+git push --force  # rewrites history other people depend on
+```
+
+## Interactive Rebase for Cleaning Up Commits
+
+Beyond combining branches, `rebase -i` (interactive rebase) is commonly used to clean up your own commit history before opening a pull request — squashing small "fix typo" commits into the meaningful commit they belong with:
+
+```bash
+git rebase -i HEAD~3
+```
+
+```text
+pick f7f3f6d Add search bar component
+squash 310154e fix typo
+squash a5f4a0d address review comment
+
+# becomes one clean commit: "Add search bar component"
+```
+
+## Choosing Between Merge and Rebase in Practice
+
+A common and reasonably safe convention:
+
+- Use `rebase` to update your own local feature branch with the latest `main`, before it is shared or as part of tidying commits before a pull request.
+- Use `merge` (often via a pull request's "merge" button) to bring a completed, reviewed feature branch back into `main`, preserving a record of when that feature was integrated.
+- Avoid rebasing any branch once other people have pulled it, unless the whole team is explicitly coordinating around a force-push.
+
+## Best Practices
+
+- Rebase local, unpublished work to keep history clean before sharing it.
+- Merge for integrating completed, reviewed feature branches back into a shared branch like `main`.
+- Communicate clearly with your team before force-pushing a rebased branch that others might have already pulled.
+- Use interactive rebase to squash noisy "WIP" or "fix typo" commits into meaningful units before opening a pull request.
+- Configure `git pull --rebase` (or `git config pull.rebase true`) if your team prefers to avoid unnecessary merge commits when syncing with a remote branch.
+
+## Common Mistakes to Avoid
+
+- Force-pushing a rebased branch that teammates have already based their own work on, causing confusing conflicts for everyone involved.
+- Rebasing a long-lived shared branch instead of a personal feature branch.
+- Resolving the same merge conflict repeatedly across many commits during a rebase, instead of using `git rebase --continue` correctly or considering a merge instead for a particularly conflict-heavy branch.
+- Assuming rebase "loses" commits — the original commits are simply abandoned and eventually garbage collected, not instantly deleted, which is why recovery via `git reflog` is often possible shortly after a mistake.
+
+## Interactive Rebase for Cleaning Up History
+
+Beyond replaying commits onto a new base, `git rebase -i` (interactive rebase) lets you rewrite your own unpushed commit history before sharing it — squashing several small "fix typo" commits into one meaningful commit, reordering commits, or editing an old commit message:
+
+```bash
+git rebase -i HEAD~4
+# opens an editor listing the last 4 commits, e.g.:
+#   pick a1b2c3d Add login form
+#   pick d4e5f6a Fix typo
+#   pick 7a8b9c0 Fix another typo
+#   pick 1c2d3e4 Add validation
+# change "pick" to "squash" (or "s") on the typo-fix commits
+```
+
+After saving, Git combines the squashed commits into the one above them, prompting you to write a single combined commit message — turning four noisy commits into one clean "Add login form with validation" commit. This is purely a local history-cleanup tool and follows the exact same golden rule as regular rebasing: only rewrite commits that have not been pushed and shared with others, since squashing or reordering commits that other people have already built on top of will rewrite history out from under them. Many teams use interactive rebase routinely before opening a pull request, turning a messy sequence of work-in-progress commits into a small number of well-described, logically grouped commits that are much easier for a reviewer to read.
+
+If a rebase goes wrong — a resolved conflict turns out to have been resolved incorrectly, or you simply want to start over — `git rebase --abort` returns the branch to exactly the state it was in before the rebase began, as if it had never happened. This safety net is worth remembering specifically because rebase conflicts can appear repeatedly, once per replayed commit, which feels more disorienting than a single merge conflict resolved once; knowing you can always cleanly back out makes it much less stressful to work through them one at a time.
+
+Git also provides `git rerere` ("reuse recorded resolution"), which remembers how you resolved a specific conflict and automatically reapplies the same resolution if an identical conflict appears again — genuinely useful on long-lived branches that get rebased repeatedly against a fast-moving main branch, where the same handful of conflicts might otherwise need to be resolved by hand over and over.
+
+## Conclusion
+
+Merge and rebase are not competing tools with one "correct" answer — they solve the same problem with different trade-offs between preserving true history and keeping that history clean and linear. Rebase your own unshared work freely; merge shared, reviewed work back together; and always respect the golden rule once a branch has been pushed for others to build on.

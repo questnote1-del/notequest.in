@@ -1,0 +1,155 @@
+---
+title: "SQL Indexing for Performance"
+description: "Learn how SQL indexes speed up queries, how B-tree indexes work internally, when composite indexes help, and how to avoid common indexing mistakes that hurt..."
+category: sql
+tags: ["sql", "indexing", "performance", "database"]
+author: arjun-mehta
+publishedAt: "2025-01-21"
+updatedAt: "2025-03-09"
+featured: false
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "Do indexes make every query faster?"
+    answer: "No. Indexes speed up lookups, filtering, and sorting on indexed columns, but they add overhead to every insert, update, and delete since the index must be maintained alongside the table data."
+  - question: "What is a composite index?"
+    answer: "A composite index is built on more than one column, and it is most effective when queries filter or sort using the leftmost columns of that index in the same order they were defined."
+  - question: "Why isn't my query using the index I created?"
+    answer: "Common causes include applying a function to the indexed column in the WHERE clause, using a leading wildcard in a LIKE pattern, or a mismatched data type in the comparison, all of which can prevent the database from using the index."
+  - question: "What is the difference between a clustered and non-clustered index?"
+    answer: "A clustered index determines the physical order in which table rows are stored on disk, and a table can have only one, while a non-clustered index is a separate structure that points back to the table's rows, and a table can have many."
+references:
+  - title: "PostgreSQL Docs — Indexes"
+    url: "https://www.postgresql.org/docs/current/indexes.html"
+  - title: "MySQL Docs — Optimization and Indexes"
+    url: "https://dev.mysql.com/doc/refman/8.4/en/mysql-indexes.html"
+  - title: "Use The Index, Luke — SQL Indexing Guide"
+    url: "https://use-the-index-luke.com/"
+---
+
+## Introduction
+
+Without an index, finding a single row in a table means scanning every row from top to bottom — a full table scan. As tables grow into the millions of rows, that scan turns a query that should take milliseconds into one that takes seconds or minutes. Indexes solve this by maintaining a separate, ordered structure that lets the database jump directly to the relevant rows. This guide explains how they work and how to use them effectively.
+
+## How a B-Tree Index Works, Conceptually
+
+Most relational database indexes use a B-tree structure: a balanced tree that keeps values sorted and lets the database find any value in a small, predictable number of steps, similar to how a phone book lets you jump to "M" without reading every name before it.
+
+```sql
+CREATE INDEX idx_users_email ON users (email);
+```
+
+After creating this index, looking up a user by `email` no longer requires scanning the whole table — the database walks the B-tree, finds the matching entry, and follows a pointer straight to the corresponding row.
+
+## Measuring the Difference: EXPLAIN
+
+Every major SQL database provides an `EXPLAIN` command that shows how a query will actually be executed, including whether an index is used:
+
+```sql
+EXPLAIN SELECT * FROM users WHERE email = 'ada@example.com';
+
+-- Without an index: "Seq Scan on users" (full table scan)
+-- With an index:    "Index Scan using idx_users_email on users"
+```
+
+Running `EXPLAIN` (or `EXPLAIN ANALYZE` for actual timing) before and after adding an index is the most reliable way to confirm it is actually helping, rather than guessing.
+
+## Composite Indexes and Column Order
+
+An index can span multiple columns, and the order of those columns matters enormously:
+
+```sql
+CREATE INDEX idx_orders_customer_date ON orders (customer_id, created_at);
+```
+
+This index efficiently supports queries filtering by `customer_id` alone, or by `customer_id` and `created_at` together, because it can use the leftmost columns of the index. It does **not** efficiently support a query that filters only by `created_at`, since the index is sorted primarily by `customer_id` first.
+
+```sql
+-- Uses the composite index efficiently
+SELECT * FROM orders WHERE customer_id = 42 AND created_at > '2026-01-01';
+
+-- Cannot use the composite index efficiently (created_at isn't the leftmost column)
+SELECT * FROM orders WHERE created_at > '2026-01-01';
+```
+
+## When Indexes Hurt: Write Overhead
+
+Every index must be updated whenever a row is inserted, updated, or deleted, which adds overhead to write operations. A table with ten indexes will insert rows noticeably slower than a table with two, because the database has to maintain all ten structures on every write.
+
+This is why indexing is a trade-off, not a "the more the better" decision: index the columns your queries actually filter, join, or sort on frequently, and avoid indexing columns that are rarely queried or that change constantly.
+
+## Common Reasons an Index Is Not Used
+
+```sql
+-- Function applied to the column prevents index use (in most databases without a matching expression index)
+SELECT * FROM users WHERE LOWER(email) = 'ada@example.com';
+
+-- Leading wildcard prevents efficient index use
+SELECT * FROM users WHERE name LIKE '%dell';
+
+-- Comparing mismatched types can silently prevent index use
+SELECT * FROM orders WHERE customer_id = '42'; -- if customer_id is an integer column
+```
+
+An expression index can solve the first case by indexing the *result* of the function directly:
+
+```sql
+CREATE INDEX idx_users_lower_email ON users (LOWER(email));
+```
+
+## Unique Indexes for Data Integrity
+
+Indexes are not only for speed — a unique index also enforces a data integrity constraint at the database level:
+
+```sql
+CREATE UNIQUE INDEX idx_users_email_unique ON users (email);
+
+INSERT INTO users (email) VALUES ('ada@example.com');
+INSERT INTO users (email) VALUES ('ada@example.com'); -- fails: duplicate key
+```
+
+## Covering Indexes
+
+A covering index includes every column a query needs, so the database can answer the query directly from the index without touching the table at all:
+
+```sql
+CREATE INDEX idx_orders_covering ON orders (customer_id, created_at, amount);
+
+SELECT created_at, amount FROM orders WHERE customer_id = 42;
+-- can be answered entirely from the index, no table lookup needed
+```
+
+## Best Practices
+
+- Index columns that appear frequently in `WHERE`, `JOIN`, and `ORDER BY` clauses.
+- Order composite index columns from most selective (or most commonly filtered alone) to least.
+- Use `EXPLAIN` to verify an index is actually being used, rather than assuming it is.
+- Add unique indexes for columns that must be unique, gaining both a performance benefit and a correctness guarantee.
+- Periodically review and drop unused indexes — every index you keep adds write overhead even if no query benefits from it anymore.
+
+## Common Mistakes to Avoid
+
+- Indexing every column "just in case," which slows down writes without a proportional read benefit.
+- Creating a composite index with columns in the wrong order for how queries actually filter data.
+- Wrapping indexed columns in functions inside `WHERE` clauses without a matching expression index, silently disabling index usage.
+- Assuming an index helps without checking `EXPLAIN`, especially on small tables where a full scan can sometimes be faster than an index lookup.
+
+## Partial Indexes for Targeted Coverage
+
+Not every row in a table is equally important to index. A partial (or filtered) index only covers rows matching a specified condition, keeping the index smaller and faster to maintain when queries consistently filter on that same condition:
+
+```sql
+-- Only index active users, ignoring the (potentially much larger) inactive set
+CREATE INDEX idx_active_users_email ON users (email) WHERE is_active = true;
+```
+
+This is especially effective when a large fraction of rows share a status that most queries explicitly exclude — soft-deleted records, cancelled orders, or archived data. Indexing only the "live" subset of rows keeps the index compact, which means faster lookups and less storage and write overhead compared to indexing the entire table, including rows that queries rarely, if ever, touch. The trade-off is that the partial index only helps queries whose `WHERE` clause is compatible with (or a superset of) the index's own filter condition — a query looking for inactive users would gain nothing from the example above and would need its own separate index if that access pattern also needs to be fast.
+
+It is also worth periodically reviewing which indexes are actually being used in production, since an index that no query ever touches provides zero read benefit while still paying the full write and storage cost on every insert or update. Most database systems expose usage statistics for exactly this purpose — PostgreSQL's `pg_stat_user_indexes` and MySQL's performance schema both report how often each index has actually been used, making it straightforward to identify and drop indexes that were added speculatively but never paid for themselves.
+
+Index maintenance itself is not entirely free even for indexes that are used: as a table's data changes over time, B-tree indexes can become fragmented, with pages splitting unevenly and leaving gaps that reduce lookup efficiency. Periodically rebuilding or reorganizing indexes on write-heavy tables — most database systems provide a built-in command for this — keeps the index's internal structure balanced and its performance close to what it was when it was first created.
+
+## Conclusion
+
+Indexes are one of the highest-leverage tools for SQL performance, but they are not free — they trade write speed and storage for read speed. Understanding how B-tree indexes work, how column order affects composite indexes, and how to verify usage with `EXPLAIN` turns indexing from guesswork into a deliberate, measurable optimization strategy.

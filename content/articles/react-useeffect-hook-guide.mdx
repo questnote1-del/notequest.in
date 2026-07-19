@@ -1,0 +1,210 @@
+---
+title: "The Complete Guide to useEffect in React"
+description: "A complete, practical guide to React's useEffect hook covering dependency arrays, cleanup functions, common pitfalls, and when you actually don't need an eff..."
+category: react
+tags: ["react", "useeffect", "hooks", "side-effects"]
+author: priya-sharma
+publishedAt: "2024-04-30"
+updatedAt: "2024-07-01"
+featured: true
+popular: false
+draft: false
+coverImage: "/images/og-default.png"
+faqs:
+  - question: "When does useEffect run?"
+    answer: "By default, useEffect runs after every render, once the DOM has been updated. Providing a dependency array limits it to run only after the initial render plus whenever one of the listed values changes."
+  - question: "What does an empty dependency array mean?"
+    answer: "An empty array, [], tells React the effect does not depend on any reactive value, so it runs once after the initial render and never again, unless the component unmounts and remounts."
+  - question: "Why does my effect run twice in development?"
+    answer: "React 18's Strict Mode intentionally mounts, unmounts, and remounts components once in development to help you find effects that are missing proper cleanup. It does not happen in production builds."
+  - question: "Do I need useEffect to fetch data?"
+    answer: "You can use useEffect for data fetching, but for most real applications a dedicated data-fetching library or framework feature (like Next.js server components or React Query) handles caching, race conditions, and loading states far more reliably."
+references:
+  - title: "React Docs — useEffect"
+    url: "https://react.dev/reference/react/useEffect"
+  - title: "React Docs — Synchronizing with Effects"
+    url: "https://react.dev/learn/synchronizing-with-effects"
+  - title: "React Docs — You Might Not Need an Effect"
+    url: "https://react.dev/learn/you-might-not-need-an-effect"
+---
+
+## Introduction
+
+`useEffect` is one of the most frequently used — and most frequently misused — hooks in React. It exists to synchronize your component with something outside of React's rendering model: the DOM, a subscription, a timer, or a network request. Once you internalize that mental model, "synchronize with an external system," most of the confusion around dependency arrays and cleanup functions disappears.
+
+## The Basic Shape of useEffect
+
+```javascript
+import { useEffect, useState } from "react";
+
+function DocumentTitleUpdater({ count }) {
+  useEffect(() => {
+    document.title = `Count: ${count}`;
+  }, [count]);
+
+  return null;
+}
+```
+
+`useEffect` takes a function (the effect) and an optional array of dependencies. React runs the effect after the render completes and the DOM has updated, and it re-runs the effect whenever any dependency changes between renders.
+
+## The Three Dependency Array Patterns
+
+```javascript
+useEffect(() => {
+  console.log("Runs after every render");
+});
+
+useEffect(() => {
+  console.log("Runs once, after the first render only");
+}, []);
+
+useEffect(() => {
+  console.log("Runs after the first render, and again whenever `id` changes");
+}, [id]);
+```
+
+Choosing the wrong pattern is the single biggest source of `useEffect` bugs. An empty array with a dependency you forgot to list causes stale values inside the effect; a missing array causes the effect to run far more often than intended.
+
+## Cleanup Functions
+
+If your effect sets something up — a subscription, a timer, an event listener — it should tear that thing down when the component unmounts or before the effect re-runs. Returning a function from the effect does exactly that:
+
+```javascript
+useEffect(() => {
+  function handleResize() {
+    console.log(window.innerWidth);
+  }
+
+  window.addEventListener("resize", handleResize);
+
+  return () => {
+    window.removeEventListener("resize", handleResize);
+  };
+}, []);
+```
+
+Without this cleanup, every remount would add a new listener without removing the old one, leaking memory and firing the handler multiple times per event.
+
+## Data Fetching with useEffect
+
+```javascript
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUser() {
+      const response = await fetch(`/api/users/${userId}`);
+      const data = await response.json();
+      if (!cancelled) setUser(data);
+    }
+
+    loadUser();
+
+    return () => {
+      cancelled = true; // avoid setting state after unmount / stale request
+    };
+  }, [userId]);
+
+  if (!user) return <p>Loading...</p>;
+  return <h1>{user.name}</h1>;
+}
+```
+
+The `cancelled` flag prevents a classic race condition: if `userId` changes quickly, an older fetch that resolves late should not overwrite the newer, correct state.
+
+## You Might Not Need an Effect
+
+React's own documentation makes a strong point of this, and it is worth repeating: effects are for synchronizing with systems *outside* React. If you are only transforming data for rendering, you do not need an effect at all.
+
+```javascript
+// Unnecessary effect
+function Cart({ items }) {
+  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    setTotal(items.reduce((sum, i) => sum + i.price, 0));
+  }, [items]);
+  return <p>Total: {total}</p>;
+}
+
+// Better: derive the value directly during render
+function Cart({ items }) {
+  const total = items.reduce((sum, i) => sum + i.price, 0);
+  return <p>Total: {total}</p>;
+}
+```
+
+The second version avoids an extra render, an extra state variable, and an entire category of bugs where `total` briefly lags behind `items`.
+
+## Best Practices
+
+- Always include every reactive value your effect reads inside the dependency array; let your linter (`eslint-plugin-react-hooks`) enforce this.
+- Write a cleanup function whenever the effect subscribes, opens a connection, or starts a timer.
+- Prefer deriving values during render over syncing them into state with an effect.
+- Split unrelated pieces of logic into separate `useEffect` calls rather than one large effect that does several things.
+- For data fetching in real applications, consider a dedicated library or framework feature instead of hand-rolling fetch logic in every component.
+
+## Common Mistakes to Avoid
+
+- Omitting a value from the dependency array to "stop it from re-running," which usually creates stale closures instead of solving the real problem.
+- Forgetting cleanup functions for subscriptions and timers, causing leaks and duplicate side effects.
+- Using `useEffect` to compute derived state that could simply be calculated during render.
+- Triggering an infinite loop by updating a state variable inside an effect that also lists that same variable as a dependency, without a proper guard condition.
+
+## Debugging Effects That Run Too Often
+
+When an effect seems to fire more than expected, the usual culprit is an unstable dependency — an object, array, or function that gets recreated on every render even though its contents did not meaningfully change:
+
+```javascript
+function SearchResults({ query }) {
+  // New object literal on every render, even if the values are identical
+  const options = { caseSensitive: false, limit: 10 };
+
+  useEffect(() => {
+    fetchResults(query, options);
+  }, [options]); // options is a new reference every render -> effect always re-runs
+}
+```
+
+The fix is usually one of: move the object literal outside the component if it never changes, memoize it with `useMemo`, or better yet, depend on the primitive values it contains directly instead of the object itself:
+
+```javascript
+function SearchResults({ query }) {
+  useEffect(() => {
+    fetchResults(query, { caseSensitive: false, limit: 10 });
+  }, [query]); // depends only on the primitive value that actually matters
+}
+```
+
+React's official ESLint plugin (`eslint-plugin-react-hooks`) will flag missing dependencies automatically, but it cannot tell you *why* an effect re-runs too often — for that, the React DevTools Profiler, or simply logging inside the effect body temporarily, remains the most reliable way to see exactly which dependency changed between renders.
+
+## Effects That Should Not Exist
+
+Perhaps the single most common `useEffect` mistake is using it to compute a value that could simply be calculated directly during render. If a piece of state is derivable from props or other state, storing it separately and syncing it with an effect introduces an unnecessary extra render and a source of bugs where the two values briefly disagree:
+
+```javascript
+// Unnecessary: derived value stored in its own state, synced via an effect
+function Cart({ items }) {
+  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    setTotal(items.reduce((sum, item) => sum + item.price, 0));
+  }, [items]);
+  return <p>Total: {total}</p>;
+}
+
+// Better: computed directly during render, no effect needed
+function Cart({ items }) {
+  const total = items.reduce((sum, item) => sum + item.price, 0);
+  return <p>Total: {total}</p>;
+}
+```
+
+The second version has no effect, no extra state, and no render where `total` is briefly stale. As a general rule, reach for `useEffect` only when you genuinely need to synchronize with something outside React's rendering — the DOM, a subscription, a timer, or a network request — and compute everything else directly in the function body, wrapping it in `useMemo` only if profiling shows the calculation is actually expensive enough to matter.
+
+The React team's own documentation calls this out explicitly as one of the most common sources of unnecessary complexity in React codebases, precisely because it is such an easy habit to fall into after using `useEffect` correctly for genuine synchronization elsewhere. A useful gut check: if you can trace a piece of logic entirely from props and state, with no reference to anything outside the component (no DOM APIs, no subscriptions, no timers), it almost certainly belongs directly in the render body rather than inside an effect.
+
+## Conclusion
+
+`useEffect` is not "the hook you use to run code after render" in a general sense — it is specifically for synchronizing React with the world outside of it. Ask yourself, before reaching for it, whether you are really connecting to an external system or just computing something you could calculate directly during render. That single question resolves the majority of real-world `useEffect` bugs.
