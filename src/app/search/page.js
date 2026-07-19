@@ -8,7 +8,6 @@ export const metadata = buildMetadata({
   description:
     "Search NoteQuest tutorials on programming, computer science, interview preparation, and career guidance.",
   path: "/search",
-  noIndex: true,
 });
 
 export default function SearchPage() {
