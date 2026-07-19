@@ -100,6 +100,9 @@ export const metadata = {
       "max-video-preview": -1,
     },
   },
+  verification: {
+    google: "fL5YQyfKG8LO5E8lk9VqYoTpJ24GvEUWNKMS1dYiQeQ",
+  },
   other: {
     "google-adsense-account": ADSENSE_CLIENT,
   },
