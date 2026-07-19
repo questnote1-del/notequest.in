@@ -4,7 +4,7 @@ import ArticleCard from "@/components/article/ArticleCard";
 import CategoryCard from "@/components/ui/CategoryCard";
 import Newsletter from "@/components/home/Newsletter";
 import FAQ from "@/components/ui/FAQ";
-import AdPlaceholder from "@/components/ui/AdPlaceholder";
+import AdUnit from "@/components/ui/AdUnit";
 import JsonLd from "@/components/seo/JsonLd";
 import { faqSchema } from "@/lib/seo";
 import { siteConfig } from "@/data/site";
@@ -93,8 +93,6 @@ export default function HomePage() {
       </section>
 
       <div className="mx-auto max-w-7xl space-y-16 px-4 py-14 sm:px-6 lg:px-8">
-        <AdPlaceholder slot="home-top" />
-
         <section>
           <div className="mb-6 flex items-end justify-between gap-4">
             <div>
@@ -147,6 +145,8 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+
+        <AdUnit type="display" />
 
         <section>
           <div className="mb-6">
@@ -228,7 +228,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <AdPlaceholder slot="home-mid" />
+        <AdUnit type="display" />
         <Newsletter />
         <FAQ items={homeFaqs} />
       </div>

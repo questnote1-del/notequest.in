@@ -2,6 +2,7 @@ import Link from "next/link";
 import ArticleCard from "@/components/article/ArticleCard";
 import CategoryCard from "@/components/ui/CategoryCard";
 import Breadcrumb from "@/components/ui/Breadcrumb";
+import AdUnit from "@/components/ui/AdUnit";
 import JsonLd from "@/components/seo/JsonLd";
 import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
 import {
@@ -9,6 +10,7 @@ import {
   getChildCategories,
 } from "@/data/categories";
 import { getArticlesByCategory, getAllArticles } from "@/lib/articles";
+import { ADSENSE_ENABLED } from "@/data/adsense";
 
 function createParentPage(slug) {
   const parent = getParentCategoryBySlug(slug);
@@ -52,6 +54,12 @@ function createParentPage(slug) {
               ))}
             </div>
           </section>
+        )}
+
+        {ADSENSE_ENABLED && children.length > 0 && (
+          <div className="mt-10">
+            <AdUnit type="display" />
+          </div>
         )}
 
         <section className="mt-12">

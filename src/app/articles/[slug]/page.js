@@ -6,7 +6,7 @@ import TableOfContents from "@/components/article/TableOfContents";
 import RelatedArticles from "@/components/article/RelatedArticles";
 import CommentPlaceholder from "@/components/article/CommentPlaceholder";
 import ReadingProgress from "@/components/article/ReadingProgress";
-import AdPlaceholder from "@/components/ui/AdPlaceholder";
+import AdUnit from "@/components/ui/AdUnit";
 import FAQ from "@/components/ui/FAQ";
 import MDXContent from "@/components/article/MDXContent";
 import JsonLd from "@/components/seo/JsonLd";
@@ -128,9 +128,7 @@ export default async function ArticlePage({ params }) {
 
         <div className="mx-auto mt-10 grid max-w-7xl gap-10 lg:grid-cols-[1fr_280px]">
           <div>
-            <AdPlaceholder slot="article-top" className="mb-8" />
             <MDXContent source={article.content} />
-            <AdPlaceholder slot="article-bottom" className="my-10" />
 
             {article.faqs?.length > 0 && (
               <div className="my-10">
@@ -168,7 +166,7 @@ export default async function ArticlePage({ params }) {
 
           <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
             <TableOfContents headings={article.headings} />
-            <AdPlaceholder slot="article-sidebar" className="min-h-[250px]" />
+            <AdUnit type="sidebar" className="min-h-[250px]" />
           </aside>
         </div>
 

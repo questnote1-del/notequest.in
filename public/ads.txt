@@ -1,8 +1,1 @@
-# Google AdSense ads.txt
-# Replace pub-XXXXXXXXXXXXXXXX with your AdSense Publisher ID after approval.
-# Format: google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
-#
-# Until you have a publisher ID, keep this file and update the line below.
-# Leaving a placeholder can delay ads; only publish the real line after approval.
-
-# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
+google.com, pub-7940657688703813, DIRECT, f08c47fec0942fa0

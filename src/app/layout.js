@@ -8,6 +8,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import { organizationSchema, websiteSchema } from "@/lib/seo";
 import { siteConfig } from "@/data/site";
 import { ADSENSE_CLIENT, ADSENSE_ENABLED } from "@/data/adsense";
+import AdUnit from "@/components/ui/AdUnit";
 import "./globals.css";
 
 const sourceSans = Source_Sans_3({
@@ -99,12 +100,16 @@ export const metadata = {
       "max-video-preview": -1,
     },
   },
+  other: {
+    "google-adsense-account": ADSENSE_CLIENT,
+  },
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <meta name="google-adsense-account" content={ADSENSE_CLIENT} />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(!t&&d)){document.documentElement.classList.add('dark');}}catch(e){}})();`,
@@ -128,6 +133,11 @@ export default function RootLayout({ children }) {
           <main id="main-content" className="min-h-[70vh]">
             {children}
           </main>
+          {ADSENSE_ENABLED && (
+            <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+              <AdUnit type="multiplex" />
+            </div>
+          )}
           <Footer />
           <BackToTop />
         </ThemeProvider>
