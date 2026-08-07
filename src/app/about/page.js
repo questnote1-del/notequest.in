@@ -1,15 +1,11 @@
 import Link from "next/link";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema, organizationSchema } from "@/lib/seo";
+import { breadcrumbSchema, organizationSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { siteConfig } from "@/data/site";
 
-export const metadata = buildMetadata({
-  title: "About Us",
-  description:
-    "Learn about NoteQuest — our mission to teach programming and computer science through clear, practical, AdSense-ready educational content.",
-  path: "/about",
-});
+export const metadata = pageMetadata("/about");
 
 export default function AboutPage() {
   const breadcrumbs = [

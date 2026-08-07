@@ -1,16 +1,12 @@
 import CategoryCard from "@/components/ui/CategoryCard";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { categories } from "@/data/categories";
 import { getArticlesByCategory } from "@/lib/articles";
 
-export const metadata = buildMetadata({
-  title: "Categories",
-  description:
-    "Browse NoteQuest categories including JavaScript, React, Next.js, Node.js, SQL, MongoDB, DSA, system design, and interview preparation.",
-  path: "/categories",
-});
+export const metadata = pageMetadata("/categories");
 
 export default function CategoriesPage() {
   const breadcrumbs = [

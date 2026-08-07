@@ -7,6 +7,7 @@ import FAQ from "@/components/ui/FAQ";
 import AdUnit from "@/components/ui/AdUnit";
 import JsonLd from "@/components/seo/JsonLd";
 import { faqSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { siteConfig } from "@/data/site";
 import { categories, parentCategories } from "@/data/categories";
 import {
@@ -15,6 +16,8 @@ import {
   getPopularArticles,
   getArticlesByCategory,
 } from "@/lib/articles";
+
+export const metadata = pageMetadata("/");
 
 const homeFaqs = [
   {

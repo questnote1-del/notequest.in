@@ -1,14 +1,10 @@
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { siteConfig } from "@/data/site";
 
-export const metadata = buildMetadata({
-  title: "Terms & Conditions",
-  description:
-    "Terms and Conditions for using NoteQuest educational content and website services.",
-  path: "/terms",
-});
+export const metadata = pageMetadata("/terms");
 
 export default function TermsPage() {
   const breadcrumbs = [

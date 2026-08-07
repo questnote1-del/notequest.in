@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import ArticleCard from "@/components/article/ArticleCard";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema, authorSchema } from "@/lib/seo";
+import { breadcrumbSchema, authorSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { authors, getAuthorBySlug } from "@/data/authors";
 import { getArticlesByAuthor } from "@/lib/articles";
 
@@ -14,10 +15,9 @@ export async function generateMetadata({ params }) {
   const { slug } = await params;
   const author = getAuthorBySlug(slug);
   if (!author) return { title: "Author Not Found" };
-  return buildMetadata({
+  return pageMetadata(`/author/${author.slug}`, {
     title: `${author.name} — Author`,
     description: author.bio,
-    path: `/author/${author.slug}`,
   });
 }
 

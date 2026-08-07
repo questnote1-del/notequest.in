@@ -1,14 +1,9 @@
 import { Suspense } from "react";
 import SearchClient from "./SearchClient";
-import { buildMetadata } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { getAllArticles } from "@/lib/articles";
 
-export const metadata = buildMetadata({
-  title: "Search",
-  description:
-    "Search NoteQuest tutorials on programming, computer science, interview preparation, and career guidance.",
-  path: "/search",
-});
+export const metadata = pageMetadata("/search");
 
 export default function SearchPage() {
   const articles = getAllArticles().map((a) => ({

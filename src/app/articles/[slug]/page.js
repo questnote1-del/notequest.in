@@ -11,12 +11,12 @@ import FAQ from "@/components/ui/FAQ";
 import MDXContent from "@/components/article/MDXContent";
 import JsonLd from "@/components/seo/JsonLd";
 import {
-  buildMetadata,
   articleSchema,
   breadcrumbSchema,
   faqSchema,
   authorSchema,
 } from "@/lib/seo";
+import { getPageSeo, pageMetadata } from "@/lib/seo-meta";
 import { formatDate } from "@/lib/utils";
 import {
   getArticleBySlug,
@@ -35,10 +35,9 @@ export async function generateMetadata({ params }) {
     return { title: "Article Not Found" };
   }
 
-  return buildMetadata({
+  return pageMetadata(`/articles/${article.slug}`, {
     title: article.title,
     description: article.description,
-    path: `/articles/${article.slug}`,
     image: article.coverImage,
     type: "article",
     publishedTime: article.publishedAt,
@@ -66,7 +65,15 @@ export default async function ArticlePage({ params }) {
       <ReadingProgress />
       <JsonLd
         data={[
-          articleSchema(article, article.authorData),
+          articleSchema(
+            {
+              ...article,
+              description:
+                getPageSeo(`/articles/${article.slug}`)?.description ||
+                article.description,
+            },
+            article.authorData
+          ),
           breadcrumbSchema(breadcrumbs),
           authorSchema(article.authorData),
           ...(article.faqs?.length ? [faqSchema(article.faqs)] : []),

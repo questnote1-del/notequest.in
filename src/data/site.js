@@ -2,9 +2,9 @@ export const siteConfig = {
   name: "NoteQuest",
   domain: "notequest.in",
   url: "https://notequest.in",
-  tagline: "Learn Programming, Computer Science & Technology with Practical Guides.",
+  tagline: "Learn Programming and Computer Science Today",
   description:
-    "NoteQuest is an educational blog teaching JavaScript, TypeScript, React, Next.js, Node.js, databases, DSA, system design, and interview preparation with practical, beginner-friendly guides.",
+    "Learn programming and computer science with clear tutorials on JavaScript, React, Next.js, Node.js, DSA, databases, system design, and interview prep skills.",
   locale: "en_IN",
   language: "en",
   email: "questnote1@gmail.com",

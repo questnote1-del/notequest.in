@@ -1,13 +1,9 @@
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 
-export const metadata = buildMetadata({
-  title: "Editorial Policy",
-  description:
-    "NoteQuest editorial standards for accuracy, originality, updates, corrections, and educational quality.",
-  path: "/editorial-policy",
-});
+export const metadata = pageMetadata("/editorial-policy");
 
 export default function EditorialPolicyPage() {
   const breadcrumbs = [

@@ -1,14 +1,10 @@
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { siteConfig } from "@/data/site";
 
-export const metadata = buildMetadata({
-  title: "Cookie Policy",
-  description:
-    "Learn how NoteQuest uses cookies and similar technologies for analytics, preferences, and advertising.",
-  path: "/cookie-policy",
-});
+export const metadata = pageMetadata("/cookie-policy");
 
 export default function CookiePolicyPage() {
   const breadcrumbs = [

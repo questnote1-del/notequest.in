@@ -1,14 +1,10 @@
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { siteConfig } from "@/data/site";
 
-export const metadata = buildMetadata({
-  title: "Disclaimer",
-  description:
-    "NoteQuest disclaimer regarding educational content accuracy, external links, and professional advice.",
-  path: "/disclaimer",
-});
+export const metadata = pageMetadata("/disclaimer");
 
 export default function DisclaimerPage() {
   const breadcrumbs = [

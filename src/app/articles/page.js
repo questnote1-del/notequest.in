@@ -2,15 +2,11 @@ import ArticleCard from "@/components/article/ArticleCard";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import Pagination from "@/components/ui/Pagination";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { getPaginatedArticles } from "@/lib/articles";
 
-export const metadata = buildMetadata({
-  title: "All Articles",
-  description:
-    "Browse all NoteQuest programming tutorials covering JavaScript, React, Next.js, Node.js, databases, DSA, system design, and interview preparation.",
-  path: "/articles",
-});
+export const metadata = pageMetadata("/articles");
 
 export default async function ArticlesPage({ searchParams }) {
   const params = await searchParams;

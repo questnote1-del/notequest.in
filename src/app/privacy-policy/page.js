@@ -1,14 +1,10 @@
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { siteConfig } from "@/data/site";
 
-export const metadata = buildMetadata({
-  title: "Privacy Policy",
-  description:
-    "Read the NoteQuest Privacy Policy to understand how we collect, use, and protect your information.",
-  path: "/privacy-policy",
-});
+export const metadata = pageMetadata("/privacy-policy");
 
 export default function PrivacyPolicyPage() {
   const breadcrumbs = [

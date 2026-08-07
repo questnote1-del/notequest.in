@@ -1,13 +1,9 @@
 import ContactForm from "./ContactForm";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 
-export const metadata = buildMetadata({
-  title: "Contact",
-  description:
-    "Contact the NoteQuest team for questions, topic suggestions, corrections, or partnership inquiries.",
-  path: "/contact",
-});
+export const metadata = pageMetadata("/contact");
 
 export default function ContactPage() {
   return (

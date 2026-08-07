@@ -4,7 +4,8 @@ import CategoryCard from "@/components/ui/CategoryCard";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import AdUnit from "@/components/ui/AdUnit";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import {
   getParentCategoryBySlug,
   getChildCategories,
@@ -92,10 +93,9 @@ function createParentPage(slug) {
 
   return {
     Page,
-    metadata: buildMetadata({
+    metadata: pageMetadata(`/${slug}`, {
       title: parent?.name || slug,
       description: parent?.description || "",
-      path: `/${slug}`,
     }),
   };
 }

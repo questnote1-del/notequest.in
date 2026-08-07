@@ -3,7 +3,8 @@ import ArticleCard from "@/components/article/ArticleCard";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import Pagination from "@/components/ui/Pagination";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { getCategoryBySlug, categories } from "@/data/categories";
 import { getPaginatedByCategory } from "@/lib/articles";
 
@@ -15,10 +16,9 @@ export async function generateMetadata({ params }) {
   const { slug } = await params;
   const category = getCategoryBySlug(slug);
   if (!category) return { title: "Category Not Found" };
-  return buildMetadata({
+  return pageMetadata(`/category/${category.slug}`, {
     title: `${category.name} Tutorials`,
     description: category.description,
-    path: `/category/${category.slug}`,
   });
 }
 

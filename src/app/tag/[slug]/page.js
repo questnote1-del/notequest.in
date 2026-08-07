@@ -3,7 +3,8 @@ import ArticleCard from "@/components/article/ArticleCard";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import Pagination from "@/components/ui/Pagination";
 import JsonLd from "@/components/seo/JsonLd";
-import { buildMetadata, breadcrumbSchema } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/seo";
+import { pageMetadata } from "@/lib/seo-meta";
 import { getAllTags, getPaginatedByTag } from "@/lib/articles";
 import { slugify } from "@/lib/utils";
 
@@ -16,10 +17,9 @@ export async function generateMetadata({ params }) {
   const tags = getAllTags();
   const tag = tags.find((t) => t.slug === slug || slugify(t.name) === slug);
   if (!tag) return { title: "Tag Not Found" };
-  return buildMetadata({
+  return pageMetadata(`/tag/${tag.slug}`, {
     title: `Articles tagged ${tag.name}`,
     description: `Browse NoteQuest articles tagged with ${tag.name}. Practical programming and computer science tutorials.`,
-    path: `/tag/${tag.slug}`,
   });
 }
 
