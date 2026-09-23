@@ -10,6 +10,7 @@ import { faqSchema } from "@/lib/seo";
 import { pageMetadata } from "@/lib/seo-meta";
 import { siteConfig } from "@/data/site";
 import { categories, parentCategories } from "@/data/categories";
+import Hero from "@/app/component/home/Hero";
 import {
   getFeaturedArticles,
   getLatestArticles,
@@ -60,40 +61,7 @@ export default function HomePage() {
     <>
       <JsonLd data={faqSchema(homeFaqs)} />
 
-      <section className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-b from-blue-50 via-white to-white dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(37,99,235,0.12),_transparent_50%)]" />
-        <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
-          <Image
-            src="/logo.png"
-            alt="NoteQuest"
-            width={320}
-            height={81}
-            priority
-            className="h-auto w-[220px] sm:w-[280px] lg:w-[320px]"
-          />
-          <h1 className="mt-6 max-w-3xl text-2xl font-bold leading-tight text-slate-900 dark:text-white sm:text-3xl lg:text-4xl">
-            {siteConfig.tagline}
-          </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-relaxed text-slate-600 dark:text-slate-400">
-            Practical tutorials on JavaScript, React, Next.js, Node.js, databases,
-            DSA, and system design — written for learners who want clarity and real skills.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href="/articles"
-              className="inline-flex items-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-            >
-              Browse Articles
-            </Link>
-            <Link
-              href="/categories"
-              className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
-            >
-              Explore Categories
-            </Link>
-          </div>
-        </div>
-      </section>
+      <Hero />
 
       <div className="mx-auto max-w-7xl space-y-16 px-4 py-14 sm:px-6 lg:px-8">
         <section>
