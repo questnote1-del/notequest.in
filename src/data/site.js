@@ -20,6 +20,7 @@ export const siteConfig = {
   },
   navigation: [
     { name: "Home", href: "/" },
+    { name: "Videos", href: "/videos" },
     { name: "Programming", href: "/programming" },
     { name: "Frontend", href: "/frontend" },
     { name: "Backend", href: "/backend" },
